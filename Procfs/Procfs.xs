@@ -391,6 +391,7 @@ _prxmap2hash(prxmap_t * prxmap)
 	SAVE_INT32(hash,  prxmap, pr_dev);
 	SAVE_INT64(hash,  prxmap, pr_ino);
 	SAVE_UINT32(hash,  prxmap, pr_anon);
+#ifndef __SunOS_5_9
 	SAVE_UINT32(hash,  prxmap, pr_ashared);
 	SAVE_UINT32(hash,  prxmap, pr_aref);
 	SAVE_UINT32(hash,  prxmap, pr_amod);
@@ -398,6 +399,7 @@ _prxmap2hash(prxmap_t * prxmap)
 	SAVE_UINT32(hash,  prxmap, pr_vshared);
 	SAVE_UINT32(hash,  prxmap, pr_vref);
 	SAVE_UINT32(hash,  prxmap, pr_vmod);
+#endif
 
 	return ( newRV_noinc( (SV*) hash ) );
 }
@@ -965,14 +967,13 @@ SV *
 _prcred(pid) 
 	int             pid;
 	PREINIT:
-	prcred_t        prcred;
-	CODE:
-	/* We need to have an extra large buffer for the prcred_t
-	 * data structure, because it has a variable-length array at
-	 * the end of it.  This array contains groups ids.  
+	/* We need a big buffer, because a prcred struct contains
+	 * an array of gid_t, of up to NGROUPS_MAX in length. 
 	 */
+        char            prcred_buffer[( sizeof(prcred_t) + ((NGROUPS_MAX) * sizeof(gid_t)) )];
+	CODE:
 	RETVAL = read_proc_file( 
-		1, (void *) &prcred, sizeof(prcred_t) + 32 * sizeof(gid_t), 
+		1, (void *) prcred_buffer, sizeof(prcred_t) + ((NGROUPS_MAX) * sizeof(gid_t)), 
 		"cred", pid, (SV* (*)(void *)) &_prcred2hash);
 
 	if (RETVAL == NULL) XSRETURN_UNDEF;
@@ -1180,6 +1181,12 @@ _lwp(pid)
 
 	DIR             *dp;
 	struct dirent   *de;
+
+	/* We need a big buffer here, because a dirent struct
+	 * contains a variable-length name field.
+	 */
+	char            de_buffer[(sizeof(struct dirent) + MAXNAMELEN)];
+
 	char            filepath[MAXPATHLEN];
 	HV *		hash = newHV();
 
@@ -1198,7 +1205,9 @@ _lwp(pid)
 		XSRETURN_UNDEF;
 	}
 
-	while ((de = readdir(dp)) != NULL) {
+	de = (struct dirent *) de_buffer;
+
+	while (( (struct dirent *) readdir_r(dp,de)) != NULL) {
 
 		/* Only look at pid dirs */
 		if (de->d_name[0] >= '0' && de->d_name[0] <= '9') {

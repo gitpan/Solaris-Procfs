@@ -5,9 +5,9 @@ use POSIX qw(uname);
 # Check this is a supported OS release
 #
 my ($sys, $rel) = (POSIX::uname())[0,2];
-if ($sys ne "SunOS" || $rel !~ /^(5.6|5.7|5.8)$/) {
+if ($sys ne "SunOS" || $rel !~ /^(5.6|5.7|5.8|5.9)$/) {
 
-   die("Solaris::Procfs is only supported on Solaris 2.6, 7 & 8\n");
+   die("Solaris::Procfs is only supported on Solaris 2.6, 7, 8, or 9\n");
 }
 
 
@@ -19,6 +19,7 @@ if ($Config{cc} =~ /gcc/) {
    elsif ($rel eq "5.6")   { $def .= "-D__SunOS_5_6 ";   }
    elsif ($rel eq "5.7")   { $def .= "-D__SunOS_5_7 ";   }
    elsif ($rel eq "5.8")   { $def .= "-D__SunOS_5_8 ";   }
+   elsif ($rel eq "5.9")   { $def .= "-D__SunOS_5_9 ";   }
 }
 
 

@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.21';
+$VERSION     = '0.22';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -31,7 +31,7 @@ $DEBUG       = 1;
 
 		fd prcred sigact status lstatus psinfo 
 		lpsinfo usage lusage map rmap lwp auxv 
-		proot pcwd xmap
+		proot pcwd xmap 
 );
 
 %EXPORT_TAGS = (
@@ -39,8 +39,9 @@ $DEBUG       = 1;
 	procfiles => [ qw(
 		fd prcred sigact status lstatus psinfo 
 		lpsinfo usage lusage map rmap lwp auxv 
-		proot pcwd xmap
+		proot pcwd xmap 
 	) ],
+	'no_tty_list' => [],
 );
 
 
@@ -50,7 +51,25 @@ $DEBUG       = 1;
 #
 require 'Solaris/Procfs/include/sys/procfs.ph';
 
-get_tty_list();
+sub import {
+
+	my $pkg = shift;
+	my(%flags);
+	grep($flags{$_}++,@_);
+
+	# On some systems, the list of devices is enormous
+	# and it takes a long time to read them all. 
+	# If you use the 'no_tty_list' pragma then we
+	# will not try to fetch the list at launch time.
+	#
+	get_tty_list() unless $flags{':no_tty_list'};
+
+	my($oldlevel) = $Exporter::ExportLevel;
+	$Exporter::ExportLevel = 1;
+	Exporter::import($pkg,keys %flags);
+	$Exporter::ExportLevel = $oldlevel;
+}
+
 
 $not_implemented  = "NOT IMPLEMENTED";
 $not_owner = "ENOPERM: You are not owner or root and do not have permissions to open the process";
@@ -76,7 +95,7 @@ sub get_tty_list {
 			my $rdev = (stat $File::Find::name)[6];
 			$Solaris::Procfs::TTYDEVS{$rdev} = $File::Find::name if($rdev);
 		},
-		"/dev"
+		"/dev/pts"
 	);
 }  
 
@@ -118,7 +137,7 @@ sub cwd {
 
 	return if $err;
 
-	# Previous to 5.005, Cwd::abs_path() returned ""
+	# Previous to perl 5.005, Cwd::abs_path() returned ""
 	# when it actually meant to return "/".  
 	#
 	return unless defined $path;
@@ -142,7 +161,7 @@ sub root {
 
 	my $path = Cwd::abs_path("/proc/$pid/root/.");
 
-	# Previous to 5.005, Cwd::abs_path() returned ""
+	# Previous to perl 5.005, Cwd::abs_path() returned ""
 	# when it actually meant to return "/".  
 	#
 	return unless defined $path;
@@ -349,21 +368,6 @@ Parts of it need extensive rewriting and testing.
 However, the core functionality does seem to work properly. 
 
 Contributions and critiques would be warmly welcomed. 
-
-This module has been tested on the following configurations,
-using gcc for builds:
-
-    Solaris 2.6  SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
-    Solaris 2.6  SPARC  SUNWspro:  perl 5.004_04, 5.005_03, 5.6.0
-    Solaris 7    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
-    Solaris 7    x86    gcc:       perl 5.004_04, 5.005_03, 5.6.0
-    Solaris 8    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
-
-Solaris 2.5.1 is not supported, because the /proc interface 
-is quite different on that platform. 
-
-If you are building on some configuration not listed here,
-please send me an email.  
 
 
 =head1 EXAMPLES
@@ -613,6 +617,18 @@ Here is an example from the file eg1/pstop:
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.22
+
+	Fixed a bug in the _prcred function, reported by
+	David Landgren and Chris Lamb.  Also fixed a bug 
+	in the _lwp function, which prevented the module 
+	from building properly on multi-threaded perls.   
+	Thanks to Marek Rouchal for assisting with this bug.  
+	Also fixed a problem with the get_tty_devs program, 
+	thanks to Norbert Klasen for reporting this.   
+	Thanks also to the CPAN testers,
+	whose reports are very useful.  
 
 =item * Version 0.21
 

@@ -12,7 +12,7 @@
 #include "perl.h"
 #include "XSUB.h"
 
-#undef SP
+/* #undef SP */
 
 #include <stdio.h>
 #include <stdlib.h>
