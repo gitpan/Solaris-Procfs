@@ -63,9 +63,11 @@
 #define SAVE_REF(H, K) \
    hv_store(H, #K, sizeof(#K) - 1, newRV_noinc( (SV*) K), 0 );
 
+/*
 #ifndef PL_na
 #define PL_na na
 #endif
+*/
 
 int Pid;
 

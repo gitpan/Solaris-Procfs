@@ -304,6 +304,25 @@ sub AUTOLOAD {
 	}
 }
 
+#-------------------------------------------------------------
+#
+sub writectl {
+
+	my $self = shift;
+
+	unless (defined $self and ref($self) eq "Solaris::Procfs::Process") {
+
+		# You can't call Solaris::Procfs::Process::psinfo
+		# or any other function directly.  (Even though you can call
+		# Solaris::Procfs::psinfo and friends.)
+		#
+		carp "function Solaris::Procfs::Process::writectl: " .
+			"Must be called as a method, not as a class function";
+		return;
+	}
+
+	Solaris::Procfs::writectl( $self->{pid}, @_ );
+}
 
 1;
 

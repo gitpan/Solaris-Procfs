@@ -621,8 +621,9 @@ SV *
 _prcred2hash(prcred_t * prcred) 
 {
 	HV*   hash = newHV();
-	AV*   pr_groups = newAV();
-	int   i;
+	AV*   groups = newAV();
+	gid_t i;
+	gid_t * gidptr = prcred->pr_groups;
 
 	SAVE_INT32(hash, prcred, pr_euid);
 	SAVE_INT32(hash, prcred, pr_ruid);
@@ -634,11 +635,13 @@ _prcred2hash(prcred_t * prcred)
 	
 	SAVE_INT32(hash, prcred, pr_ngroups);
 
-	for (i = 0; i < 1 ; i++) 
+	for (i = 0; i < prcred->pr_ngroups ; i++) 
 	{
-		av_push(pr_groups, (SV *) newSViv( (IV) prcred->pr_groups[i] ));
+/*		av_push(groups, (SV *) newSViv(     prcred->pr_groups[i] ));*/
+		av_push(groups, (SV *) newSViv(  *( gidptr + i) ));
+		/* printf("i is %d, group is %d\n", i, prcred->pr_groups[i] ); */
 	}
-	hv_store(hash, "pr_groups",  sizeof("pr_groups") - 1, newRV_noinc( (SV*) pr_groups ), 0 );
+	hv_store(hash, "pr_groups",  sizeof("pr_groups") - 1, newRV_noinc( (SV*) groups ), 0 );
 
 	return ( newRV_noinc( (SV*) hash ) );
 }
@@ -689,7 +692,7 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 
 	int             fdesc;
 	int             bytes = 0;
-	SV*             retval = (SV*) &PL_sv_undef;
+	SV*             retval = newSVpv("", 0);
 
 	/* Fixed-length buffer will hold the name of the file 
 	 * under the /proc hierarchy which we want to access. 
@@ -821,8 +824,12 @@ _prcred(pid)
 	PREINIT:
 	prcred_t        prcred;
 	CODE:
+	/* We need to have an extra large buffer for the prcred_t
+	 * data structure, because it has a variable-length array at
+	 * the end of it.  This array contains groups ids.  
+	 */
 	RETVAL = read_proc_file( 
-		1, (void *) &prcred, sizeof(prcred_t), 
+		1, (void *) &prcred, sizeof(prcred_t) + 32 * sizeof(gid_t), 
 		"cred", pid, (SV* (*)(void *)) &_prcred2hash);
 	OUTPUT:
 	RETVAL
@@ -938,7 +945,7 @@ SV *
 _auxv(pid) 
 	int             pid;
 	PREINIT:
-	auxv_t         auxv;
+	auxv_t		auxv;
 	CODE:
 
 	RETVAL = read_proc_file( 
@@ -949,6 +956,32 @@ _auxv(pid)
 
 	CLEANUP:
 	SvREFCNT_inc( RETVAL );
+
+
+void
+_writectl(pid,...)
+	int         pid;
+
+	CODE:
+	int         i;
+	long int    args[32];
+	int         fdesc;
+	char        filepath[MAXPATHLEN];
+
+	for(i = 0; i < items - 1; i++) {
+
+		args[i] = (long) SvIV( ST(i+1) );
+	}
+	sprintf(filepath,"/proc/%d/ctl", pid);
+
+	if ((fdesc = open(filepath,O_WRONLY)) < 0) 
+	{
+		printf("Could not open file %s (error %d: %s)\n",
+			filepath, errno, strerror(errno));
+	}
+	write(fdesc, args, sizeof(long) * (items - 1));
+	close(fdesc);
+
 
 SV *
 _rmap(pid) 
@@ -983,7 +1016,7 @@ _lwp(pid)
 	prusage_t	prusage;
 
 	HV *		lwp = newHV();
-	SV *		val = (SV*) &PL_sv_undef;
+	SV *		val = newSVpv("", 0);
 
 	CODE:
 

@@ -22,17 +22,17 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.14';
-
+$VERSION     = '0.16';
 $DEBUG       = 1;
-
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
-		root cwd getpids
+		root cwd getpids writectl
+
 		fd prcred sigact status lstatus psinfo 
 		lpsinfo usage lusage map rmap lwp auxv 
 		proot pcwd
 );
+
 %EXPORT_TAGS = (
 
 	procfiles => [ qw(
@@ -41,6 +41,15 @@ $DEBUG       = 1;
 		proot pcwd
 	) ],
 );
+
+
+
+# Pull in all the flags and extra export tags.
+# This syntax is non-portable, but we are only interested
+# in Solaris systems anyway.  ;) 
+#
+require 'Solaris/Procfs/flags.pl';
+
 
 get_tty_list();
 
@@ -115,10 +124,16 @@ sub cwd {
 		or not -d "/proc/$_[0]";
 
 	my $pid = $_[0];
+
+	my $err = 0;
+
+	local $SIG{__WARN__} = sub { $err = 1; return; };
 	return $NOT_OWNER unless stat "/proc/$pid";
 
 	my $hoo = Cwd::abs_path("/proc/$pid/cwd/.");
 	my $path = $hoo;
+
+	return if $err;
 
 	# Previous to 5.005, Cwd::abs_path() returned ""
 	# when it actually meant to return "/".  
@@ -194,7 +209,7 @@ sub fd  {
 #
 sub sigact  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _sigact($_[0]);
 }
 
@@ -202,7 +217,7 @@ sub sigact  {
 #
 sub psinfo  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _psinfo($_[0]);
 }
 
@@ -210,7 +225,7 @@ sub psinfo  {
 #
 sub status  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _status($_[0]);
 }
 
@@ -218,7 +233,7 @@ sub status  {
 #
 sub prcred  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _prcred($_[0]);
 }
 
@@ -226,7 +241,7 @@ sub prcred  {
 #
 sub lpsinfo  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _lpsinfo($_[0]);
 }
 
@@ -234,7 +249,7 @@ sub lpsinfo  {
 #
 sub lstatus  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _lstatus($_[0]);
 }
 
@@ -242,7 +257,7 @@ sub lstatus  {
 #
 sub lusage  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _lusage($_[0]);
 }
 
@@ -250,7 +265,7 @@ sub lusage  {
 #
 sub usage  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _usage($_[0]);
 }
 
@@ -258,7 +273,7 @@ sub usage  {
 #
 sub map  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _map($_[0]);
 }
 
@@ -266,15 +281,29 @@ sub map  {
 #
 sub auxv  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _auxv($_[0]);
 }
 
 #-------------------------------------------------------------
 #
+sub writectl  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
+
+	my ($pid, @args) = @_;
+
+	return unless scalar @args > 0;
+
+	return _writectl($pid,@args);
+}
+
+
+#-------------------------------------------------------------
+#
 sub rmap  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _rmap($_[0]);
 }
 
@@ -282,10 +311,9 @@ sub rmap  {
 #
 sub lwp  {
 
-	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
 	return _lwp($_[0]);
 }
-
 
 1;
 
@@ -317,8 +345,8 @@ maintained by the kernel.
 This module provides methods which access these files 
 and convert the data structures contained in them 
 into nested hashrefs.  This module has been tested 
-on Solaris 2.6 and Solaris 7.  It will not work 
-on Solaris 2.5.1 systems (yet). 
+on Solaris 2.6, 7 and 8.  It will not work on 
+Solaris 2.5.1 systems (yet). 
 
 =head1 STATUS
 
@@ -331,11 +359,13 @@ Contributions and critiques would be warmly welcomed.
 This module has been tested on the following systems,
 using gcc for builds:
 
-	SunOS 5.7 (Solaris 7)   SPARC 
-	SunOS 5.7 (Solaris 7)   x86
-	SunOS 5.6 (Solaris 2.6) SPARC
+	SunOS 5.6 (Solaris 2.6) SPARC  (perl 5.004_04, 5.005_03, 5.6.0)
+	SunOS 5.7 (Solaris 7)   SPARC  (perl 5.005_03)
+	SunOS 5.7 (Solaris 7)   x86    (perl 5.005_03)
+	SunOS 5.8 (Solaris 8)   SPARC  (perl 5.005_03, 5.6.0)
 
-It may not even build on other systems.
+It may not even build on other systems.  It has not been tested
+using the Sun Workshop compiler.  
 
 
 =head1 EXAMPLES
@@ -346,33 +376,38 @@ as object methods, as functions, or as a tied hash.
 As functions:
 
 	use Solaris::Procfs;
+
 	my $psinfo = Solaris::Procfs::psinfo( $pid );
 
 As exported functions:
 
 	use Solaris::Procfs (:procfiles);
+
 	my $psinfo = psinfo( $pid );
 
 As process objects:
 
 	use Solaris::Procfs;
 	use Solaris::Procfs::Process;
+
 	my $p = new Solaris::Procfs::Process $pid;
-	my $data = $p->psinfo;
+	my $psinfo = $p->psinfo;
 
 As process objects with tied hashes:
 
 	use Solaris::Procfs;
 	use Solaris::Procfs::Process;
+
 	my $p = new Solaris::Procfs::Process $pid;
-	my $data = $p->{psinfo};
+	my $psinfo = $p->{psinfo};
 
 As a filesystem object with tied hashes:
 
 	use Solaris::Procfs;
 	use Solaris::Procfs::Filesystem;
-	my $p = new Solaris::Procfs::Filesystem;
-	my $data = $p->{psinfo}->{$pid};
+
+	my $fs = new Solaris::Procfs::Filesystem;
+	my $psinfo = $fs->{$pid}->{psinfo};
 
 =head1 FUNCTIONS
 
@@ -394,6 +429,8 @@ under /proc/{pid}.  To do this, you must use either the
 Solaris::Procfs::Process or the Solaris::Procfs::Filesystem
 modules.  If you only use the Solaris::Procfs module,
 then you can only use the function-oriented interface. 
+
+Additional functions are also available. 
 
 =head2 as
 
@@ -489,11 +526,6 @@ associated with the process (UID, GID, etc.).
 The 'psinfo' file ontains miscellaneous information about the process 
 and the representative lwp needed by the ps(1) command. 
 
-=head2 status
-
-The 'status' file ontains state information about the process and the
-representative lwp.  
-
 =head2 rmap
 
 The 'rmap' file contains information about the reserved address 
@@ -513,6 +545,11 @@ The 'sigact' file contains an array of sigaction structures describing the
 current dispositions of all signals associated with the
 traced process (see sigaction(2)).
 
+=head2 status
+
+The 'status' file ontains state information about the process and the
+representative lwp.  
+
 =head2 usage      
 
 The 'usage' file contains process usage information 
@@ -524,15 +561,33 @@ Not yet implemented.  The 'watch' file contains an array of
 prwatch structures, one for each watched area established 
 by the PCWATCH control operation. 
 
+=head1 OTHER FUNCTIONS
+
+=head2 writectl
+
+Write control directives to a process control file (/proc/<pid>/ctl).
+For example, the following code will turn on microstate accounging
+for a given process ($pid):
+
+	use Solaris::Procfs qw(writectl);
+	writectl($pid,PCSET,PR_MSACCT); 
+
 =head1 CHANGES
 
 =over 4
 
+=item * Version 0.16
+
+	Added a writectl() function for sending signals to processes.
+	Defined a set of constants which correspond to the #define's
+	in the sys/procfs.h header.  Added a few example scripts. 
+
 =item * Version 0.14
 
 	Separated the Filesystem and Process modules from the 
-	main Procfs module.  So Procfs.pm now contains 
-	no object-oriented code.
+	main Procfs module.  The module Procfs.pm itself now contains 
+	no object-oriented code.  All OO code is in Filesystem.pm
+	and Process.pm. 
 
 =item * Version 0.10
 
@@ -546,12 +601,14 @@ by the PCWATCH control operation.
 
 =item *
 
-Implement more graceful error handling and error messages. 
+Improve the documentation, test scripts and sample scripts.  
+Create examples of the use of the writectl() functions.   
+Add and test a writelwp() function similar to writectl().
 
 =item *
 
-Improve the documentation, test scripts and 
-sample scripts.
+Implement more graceful error handling and error messages. 
+Currently, errors are handled poorly and inconsistenly.  :(
 
 =item *
 
@@ -559,15 +616,9 @@ Add functions which can read the 'as' file.
 
 =item *
 
-Implement Perl functions which correspond to each of
+Finish implementing Perl scripts which correspond to each of
 the procutils binaries (under /usr/proc/bin).
 These are described in the proc(1) manpage. 
-
-=item *
-
-Add support for Solaris 8, and make sure that this 
-package will build properly on a variety of recent
-Solaris flavors.
 
 =item *
 

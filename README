@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.14 
+README file for Solaris::Procfs 0.16 
 
 
 NAME
@@ -20,8 +20,8 @@ DESCRIPTION
 
     This module provides methods which access these files and convert the
     data structures contained in them into nested hashrefs. This module has
-    been tested on Solaris 2.6 and Solaris 7. It will not work on Solaris
-    2.5.1 systems (yet).
+    been tested on Solaris 2.6, 7 and 8. It will not work on Solaris 2.5.1
+    systems (yet).
 
 STATUS
     This is pre-alpha software. It is far from finished. Parts of it need
@@ -33,46 +33,53 @@ STATUS
     This module has been tested on the following systems, using gcc for
     builds:
 
-            SunOS 5.7 (Solaris 7)   SPARC 
-            SunOS 5.7 (Solaris 7)   x86
-            SunOS 5.6 (Solaris 2.6) SPARC
+            SunOS 5.6 (Solaris 2.6) SPARC  (perl 5.004_04, 5.005_03, 5.6.0)
+            SunOS 5.7 (Solaris 7)   SPARC  (perl 5.005_03)
+            SunOS 5.7 (Solaris 7)   x86    (perl 5.005_03)
+            SunOS 5.8 (Solaris 8)   SPARC  (perl 5.005_03, 5.6.0)
 
-    It may not even build on other systems.
+    It may not even build on other systems. It has not been tested using the
+    Sun Workshop compiler.
 
 EXAMPLES
-    There are three different ways to invoke the functions in this module:
+    There are several different ways to invoke the functions in this module:
     as object methods, as functions, or as a tied hash.
 
     As functions:
 
             use Solaris::Procfs;
+
             my $psinfo = Solaris::Procfs::psinfo( $pid );
 
     As exported functions:
 
             use Solaris::Procfs (:procfiles);
+
             my $psinfo = psinfo( $pid );
 
     As process objects:
 
             use Solaris::Procfs;
             use Solaris::Procfs::Process;
+
             my $p = new Solaris::Procfs::Process $pid;
-            my $data = $p->psinfo;
+            my $psinfo = $p->psinfo;
 
     As process objects with tied hashes:
 
             use Solaris::Procfs;
             use Solaris::Procfs::Process;
+
             my $p = new Solaris::Procfs::Process $pid;
-            my $data = $p->{psinfo};
+            my $psinfo = $p->{psinfo};
 
     As a filesystem object with tied hashes:
 
             use Solaris::Procfs;
             use Solaris::Procfs::Filesystem;
-            my $p = new Solaris::Procfs::Filesystem;
-            my $data = $p->{psinfo}->{$pid};
+
+            my $fs = new Solaris::Procfs::Filesystem;
+            my $psinfo = $fs->{$pid}->{psinfo};
 
 FUNCTIONS
     This module defines functions which each correspond to the files
@@ -90,6 +97,8 @@ FUNCTIONS
     Solaris::Procfs::Process or the Solaris::Procfs::Filesystem modules. If
     you only use the Solaris::Procfs module, then you can only use the
     function-oriented interface.
+
+    Additional functions are also available.
 
   as
 
@@ -184,11 +193,6 @@ FUNCTIONS
     The 'psinfo' file ontains miscellaneous information about the process
     and the representative lwp needed by the ps(1) command.
 
-  status
-
-    The 'status' file ontains state information about the process and the
-    representative lwp.
-
   rmap
 
     The 'rmap' file contains information about the reserved address ranges
@@ -208,6 +212,11 @@ FUNCTIONS
     the current dispositions of all signals associated with the traced
     process (see sigaction(2)).
 
+  status
+
+    The 'status' file ontains state information about the process and the
+    representative lwp.
+
   usage
 
     The 'usage' file contains process usage information described by a
@@ -219,28 +228,44 @@ FUNCTIONS
     structures, one for each watched area established by the PCWATCH control
     operation.
 
+OTHER FUNCTIONS
+  writectl
+
+    Write control directives to a process control file (/proc/<pid>/ctl).
+    For example, the following code will turn on microstate accounging for a
+    given process ($pid):
+
+            use Solaris::Procfs qw(writectl);
+            writectl($pid,PCSET,PR_MSACCT); 
+
 CHANGES
+    * Version 0.16
+                Added a writectl() function for sending signals to processes.
+                Defined a set of constants which correspond to the #define's
+                in the sys/procfs.h header.  Added a few example scripts. 
+
     * Version 0.14
                 Separated the Filesystem and Process modules from the 
-                main Procfs module.  So Procfs.pm now contains 
-                no object-oriented code.
+                main Procfs module.  The module Procfs.pm itself now contains 
+                no object-oriented code.  All OO code is in Filesystem.pm
+                and Process.pm. 
 
     * Version 0.10
                 Initial release on CPAN
 
 TO DO
-    *   Improve the documentation, test scripts and sample scripts.
+    *   Improve the documentation, test scripts and sample scripts. Create
+        examples of the use of the writectl() functions. Add and test a
+        writelwp() function similar to writectl().
 
-    *   Finish writing the Perl interface functions in Procfs.pm.
+    *   Implement more graceful error handling and error messages. Currently,
+        errors are handled poorly and inconsistenly. :(
 
     *   Add functions which can read the 'as' file.
 
-    *   Implement Perl functions which correspond to each of the procutils
-        binaries (under /usr/proc/bin). These are described in the proc(1)
-        manpage.
-
-    *   Add support for Solaris 8, and make sure that this package will build
-        properly on a variety of recent Solaris flavors.
+    *   Finish implementing Perl scripts which correspond to each of the
+        procutils binaries (under /usr/proc/bin). These are described in the
+        proc(1) manpage.
 
     *   Add support for Solaris 2.5.1. This will require a good bit of work, as
         the /proc filesystem is rather different under Solaris 2.5.1. This
