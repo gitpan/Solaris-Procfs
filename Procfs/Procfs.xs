@@ -773,6 +773,8 @@ _psinfo2hash(psinfo_t * psinfo)
 	}
 	
 	SAVE_STRUCT(hash, psinfo, pr_lwp,  _lwpsinfo2hash );
+	free(buf);
+	free(argvp);
 
 	return ( newRV_noinc( (SV*) hash ) );
 }

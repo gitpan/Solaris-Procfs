@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl -w
+#!/u0/perl/perl580/bin/perl -w
 
 use ExtUtils::testlib;
 use Solaris::Procfs;

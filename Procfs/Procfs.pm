@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.23';
+$VERSION     = '0.24';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -464,7 +464,7 @@ Not implemented as a function.  The 'ctl' file is a write-only file
 to which structured messages are written directing the system to change 
 some aspect of the process's state or control its behavior in some way.  
 This file somewhat like a device file.  See the examples
-directory 'eg1' included in this package for some simple 
+directory 'examples' included in this package for some simple 
 examples showing how to write to this file. 
 
 =head2 cwd or pcwd
@@ -614,7 +614,7 @@ of the error.  The most likely error message will be "No such file or directory"
 if the process you are accessing does not exist, or "Permission denied" 
 or "Bad file number" if you do not have permission to access the file.  
 
-Here is an example from the file eg1/ptree:
+Here is an example from the file examples/ptree:
 
 	my $psinfo = psinfo($pid);
 
@@ -623,7 +623,7 @@ Here is an example from the file eg1/ptree:
 		warn "Cannot get psinfo on process $pid: $!\n";
 	}
 
-Here is an example from the file eg1/pstop:
+Here is an example from the file examples/pstop:
 
 	writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
@@ -631,6 +631,11 @@ Here is an example from the file eg1/pstop:
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.24
+
+	Plugged a memory leak in the _psinfo2hash() function.
+	Thanks to Dmitry Frolov for catching this and sending a patch. 
 
 =item * Version 0.23
 
@@ -740,7 +745,7 @@ of processes other than the currently running process.
 
 =head1 AUTHOR
 
-John Nolan jpnolan@sonic.net 1999-2002.  
+John Nolan jpnolan@sonic.net 1999-2003.  
 A copyright statment is contained in the source code itself. 
 
 =cut
