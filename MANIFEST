@@ -3,7 +3,13 @@ README
 Makefile.PL
 Procfs/Makefile.PL
 Procfs/Procfs.pm
-Procfs/Procfs.h
 Procfs/Procfs.xs
+Procfs/Procfs.h
+Procfs/Process/Makefile.PL
+Procfs/Process/Process.pm
+Procfs/Filesystem/Makefile.PL
+Procfs/Filesystem/Filesystem.pm
 Procfs/t/Procfs.t
+Procfs/t/Process.t
+Procfs/t/Filesystem.t
 demo

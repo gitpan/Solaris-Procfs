@@ -1,7 +1,6 @@
 #---------------------------------------------------------------------------
 
 package Solaris::Procfs;
-package Solaris::Procfs::Process;   
 
 # Copyright (c) 1999,2000 John Nolan. All rights reserved.
 # This program is free software.  You may modify and/or
@@ -13,206 +12,60 @@ package Solaris::Procfs::Process;
 # html file format (these utilities are part of the
 # Perl 5 distribution).
 
-#-------------------------------------------------------------
-package Solaris::Procfs;
-#-------------------------------------------------------------
-
-use vars qw($VERSION @ISA $AUTOLOAD);
+use vars qw($VERSION @ISA $AUTOLOAD @EXPORT_OK %EXPORT_TAGS);
+use vars qw($WARNSTRINGS $DEBUG);
 use strict;
 use DynaLoader;
 use Carp;
 use File::Find;
 
+require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION = '0.10';
-@ISA = qw(DynaLoader);
+$VERSION     = '0.14';
+
+$DEBUG       = 1;
+
+@ISA         = qw(DynaLoader Exporter);
+@EXPORT_OK   = qw( 
+		root cwd getpids
+		fd prcred sigact status lstatus psinfo 
+		lpsinfo usage lusage map rmap lwp auxv 
+		proot pcwd
+);
+%EXPORT_TAGS = (
+
+	procfiles => [ qw(
+		fd prcred sigact status lstatus psinfo 
+		lpsinfo usage lusage map rmap lwp auxv 
+		proot pcwd
+	) ],
+);
 
 get_tty_list();
 
+
+# Yuck, this ugly.  
+# This needs to be reimplemented more cleanly.  
+#
+use vars qw(
+	$NOT_OWNER 
+	$NOT_THIS_PROCESS 
+	$NOT_IMPLEMENTED
+	$CANNOT_READ_FILE
+	$FILE_NOT_FOUND
+	$NO_SUCH_PROCESS
+);
+
+$NOT_OWNER         = "NOT OWNER";
+$NOT_THIS_PROCESS  = "NOT THIS PROCESS";
+$NOT_IMPLEMENTED   = "NOT IMPLEMENTED";
+$FILE_NOT_FOUND    = "FILE NOT FOUND";
+$CANNOT_READ_FILE  = "CANNOT READ FILE";
+$NO_SUCH_PROCESS   = "NO SUCH PROCESS";
+
+
 bootstrap Solaris::Procfs $VERSION;
-
-#-------------------------------------------------------------
-# Dispatch hash, used by the FETCH method to dispatch fetch
-# operations to the appropriate internal function. 
-#
-# This is also used by the AUTOLOAD function of 
-# Solaris::Procfs::Process, to send method calls 
-# directly to the corresponding method in Solaris::Procfs. 
-#
-my $dispatcher = {
-
-	'root'      => \&root,
-	'cwd'       => \&cwd,
-	'fd'        => \&fd,
-
-	'prcred'    => \&_prcred,
-	'sigact'    => \&_sigact,
-	'status'    => \&_status,
-	'lstatus'   => \&_lstatus,
-	'psinfo'    => \&_psinfo,
-	'lpsinfo'   => \&_lpsinfo,
-	'usage'     => \&_usage,
-	'lusage'    => \&_lusage,
-	'map'       => \&_map,
-	'rmap'      => \&_rmap,
-	'lwp'       => \&_lwp,
-	'auxv'      => \&_auxv,
-};
-
-foreach (keys %$dispatcher) {
-
-	$dispatcher->{"Solaris::Procfs::$_"}          = $dispatcher->{$_};
-	$dispatcher->{"Solaris::Procfs::Process::$_"} = $dispatcher->{$_};
-}
-
-
-#-------------------------------------------------------------
-#
-sub new {
-
-	my ($proto, $pid) = @_;
-	my $class = ref($proto) || $proto;
-
-	my $self;
-
-	if (defined $pid and $pid =~ /^\d+$/) {
-
-#-#		print STDERR (caller 0)[3], 
-#-#			": Invoking new() on Solaris::Procfs::Process for pid $pid\n";
-		$self = new Solaris::Procfs::Process $pid ;
-
-	} else {
-
-#-#		print STDERR (caller 0)[3], 
-#-#			": Creating object\n";
-		$self = {};
-		tie  %$self, $class;
-		bless $self, $class;
-	}
-
-	return $self;     
-}
-
-
-#-------------------------------------------------------------
-#
-sub FETCH {
-
-	my $self = "";
-	my $index = "";
-	($self, $index) = @_;
-
-	return unless defined $index;
-
-#-#	print STDERR (caller 0)[3], 
-#-#		": Read \$index $index\n";
-
-	if ($index =~ /^\d+$/) {
-
-		if (not exists $self->{$index} or not defined $self->{$index} ) {
-
-#-#			print STDERR (caller 0)[3], 
-#-#				": creating object for pid $index\n";
-
-			my $temp        = new Solaris::Procfs::Process $index ; 
-			$self->{$index} = $temp;
-		}
-
-		return $self->{$index}
-
-	} else {
-
-#-#		print STDERR (caller 0)[3], 
-#-#			": no such process as $index\n";
-
-		return undef;
-	}
-}
-
-#-------------------------------------------------------------
-#
-sub DELETE {
-
-	my ($self, $index) = @_;
-
-#-#	print STDERR (caller 0)[3], ": \$index is $index\n";
-
-	# Can't remove the pid element
-	#
-	return if $index eq 'pid';
-
-	return delete $self->{$index};
-}
-
-#-------------------------------------------------------------
-#
-sub EXISTS {
-
-	my ($self, $index) = @_;
-#-#	print STDERR (caller 0)[3], ": \$index is $index\n";
-	return exists $self->{$index};
-}
-
-#-------------------------------------------------------------
-#
-sub STORE {
-
-	my ($self, $index, $val) = @_;
-
-	# Can't modify the pid element, if it's there.
-	# It can only be defined at the time the hash is created. 
-	#
-	return if $index eq 'pid';
-
-#-#	print STDERR (caller 0)[3], ": \$index is $index, \$val is $val\n";
-	return $self->{$index};
-}
-
-#-------------------------------------------------------------
-#
-sub TIEHASH {
-
-	my ($pkg) = @_;
-	my $self = {};
-#-#	print STDERR (caller 0)[3], ": \$self is $self, \$pkg is $pkg\n";
-	return (bless $self, $pkg);
-}
-
-#-------------------------------------------------------------
-#
-sub NEXTKEY {
-
-	my ($self) = @_;
-#-#	print STDERR (caller 0)[3], ": \n";
-	return each %{ $self };
-}
-
-#-------------------------------------------------------------
-#
-sub FIRSTKEY {
-
-	my ($self) = @_;
-#-#	print STDERR (caller 0)[3], ": \n";
-	keys %{ $self };
-	return each %{ $self };
-}
-
-#-------------------------------------------------------------
-#
-sub DESTROY {
-
-	my ($self) = @_;
-#-#	print STDERR (caller 0)[3], ": \$self is $self\n";
-}
-
-#-------------------------------------------------------------
-#
-sub CLEAR {
-
-	my ($self) = @_;
-#-#	print STDERR (caller 0)[3], ": \$self is $self\n";
-}
 
 
 #-------------------------------------------------------------
@@ -239,9 +92,6 @@ sub get_tty_list {
 #
 sub getpids  { 
 
-	my $arg = shift;
-	my $pid = (ref($arg) ?  shift : $arg);
-
 	unless (opendir (DIR, "/proc") ) {
 
 		carp "Couldn't open directory /proc : $!";
@@ -255,12 +105,17 @@ sub getpids  {
 	return  @pids;
 }
 
+
+
 #-------------------------------------------------------------
 #
 sub cwd {
 
-	my $arg = shift;
-	my $pid = (ref($arg) ?  shift : $arg);
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/
+		or not -d "/proc/$_[0]";
+
+	my $pid = $_[0];
+	return $NOT_OWNER unless stat "/proc/$pid";
 
 	my $hoo = Cwd::abs_path("/proc/$pid/cwd/.");
 	my $path = $hoo;
@@ -277,8 +132,12 @@ sub cwd {
 #
 sub root {
 
-	my $arg = shift;
-	my $pid = (ref($arg) ?  shift : $arg);
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/
+		or not -d "/proc/$_[0]";
+
+	my $pid = $_[0];
+
+	return $NOT_OWNER unless stat "/proc/$pid";
 
 	my $path = Cwd::abs_path("/proc/$pid/root/.");
 
@@ -290,18 +149,30 @@ sub root {
 	return $path;
 }
 
+
+
+#-------------------------------------------------------------
+#  These names are more exportable
+#
+*proot = *root;
+*pcwd  = *cwd;
+
+
 #-------------------------------------------------------------
 #
 sub fd  { 
 
-	my $arg = shift;
-	my $pid = (ref($arg) ?  shift : $arg);
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/
+		or not -d "/proc/$_[0]";
+
+	my $pid = $_[0];
+
 	my %retval;
 
 	unless (opendir (DIR, "/proc/$pid/fd") ) {
 
 		carp "Couldn't open directory /proc/$pid/fd : $!";
-		return;
+		return $NOT_OWNER;
 	}
 
 	foreach ( grep /^\d+$/, readdir DIR ) {
@@ -321,144 +192,98 @@ sub fd  {
 
 #-------------------------------------------------------------
 #
-sub AUTOLOAD {
+sub sigact  {
 
-	my $arg = shift;
-	my $pid = ref($arg) ? shift : $arg;
-
-#-#	print STDERR (caller 0)[3], ": Want function $AUTOLOAD\n";
-
-	if (exists $dispatcher->{$AUTOLOAD} ) {
-
-		unless (defined $pid and $pid =~ /^\d+$/) {
-
-			carp "$AUTOLOAD: Must specify pid as an integer";
-			return;
-		}
-
-#-#		print STDERR (caller 0)[3], ": Delegating to function $AUTOLOAD\n";
-		my $temp = &{ $dispatcher->{$AUTOLOAD} }($pid);
-		return $temp;
-
-	} else {
-		carp ( 
-			(caller 0)[3] .  
-			": Attempt to invoke nonexistant function $AUTOLOAD\n" 
-		);
-		return;
-	}
-}
-
-
-#-------------------------------------------------------------
-package Solaris::Procfs::Process;
-#-------------------------------------------------------------
-
-use vars qw($VERSION @ISA $AUTOLOAD);
-$VERSION = $Solaris::Procfs::VERSION;
-@ISA = qw(Solaris::Procfs DynaLoader);
-
-use Carp;
-
-#-------------------------------------------------------------
-#
-sub new {
-
-	my ($proto, $pid) = @_;
-	my $class = ref($proto) || $proto;
-
-#-#	print STDERR (caller 0)[3], ": Creating object for pid $pid\n";
-
-	return unless defined $pid and $pid =~ /^\d+$/;
-
-	my $self = {};
-	tie  %$self, $class, $pid;
-	bless $self, $class;
-	return $self;     
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _sigact($_[0]);
 }
 
 #-------------------------------------------------------------
 #
-sub TIEHASH {
+sub psinfo  {
 
-	my ($pkg,$pid) = @_;
-	my $self = { pid => $pid };
-#-#	print STDERR (caller 0)[3], ": \$self is $self, \$pkg is $pkg, \$pid is $pid\n";
-	return (bless $self, $pkg);
-}
-
-
-#-------------------------------------------------------------
-#
-sub FETCH {
-
-	my ($self, $index) = @_;
-	return unless defined $index;
-
-#-#	print STDERR (caller 0)[3], ": Read \$index $index, \$self->{pid} is $self->{pid}\n";
-
-	if ($index eq "pid") {
-
-#-#		print STDERR (caller 0)[3], ": Returning \$self->{$index} : $self->{$index}\n";
-		return $self->{$index};
-
-	} elsif ( -d "/proc/$self->{pid}" ) {
-
-		if ( exists $self->{$index} ) {
-
-#-#			print STDERR (caller 0)[3], ": Returning cached results\n";
-			return $self->{$index};
-
-		} elsif ( exists $dispatcher->{$index} ) {
-
-#-#			print STDERR (caller 0)[3], ": Delegating to function\n";
-			$self->{$index} = &{ $dispatcher->{$index} }( $self->{pid} ) ;
-			return $self->{$index};
-
-		} else {
-
-#-#			print STDERR (caller 0)[3], ": No such function as $self->{$index}\n";
-			return;  ## If the user requested a function not in Procfs
-		}
-
-	} else {   # if not -d "/proc/$self->{pid}" 
-		
-#-#		print STDERR (caller 0)[3], ": No such process as $self->{pid}\n";
-		return;  ## If the process no longer exists under /proc
-	}
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _psinfo($_[0]);
 }
 
 #-------------------------------------------------------------
 #
-sub AUTOLOAD {
+sub status  {
 
-	my $self = shift;
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _status($_[0]);
+}
 
-#-#	print STDERR (caller 0)[3], ": Want function $AUTOLOAD\n";
+#-------------------------------------------------------------
+#
+sub prcred  {
 
-	if (exists $dispatcher->{$AUTOLOAD} ) {
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _prcred($_[0]);
+}
 
-		unless (defined $self and ref($self) eq "Solaris::Procfs::Process") {
+#-------------------------------------------------------------
+#
+sub lpsinfo  {
 
-			# You can't call Solaris::Procfs::Process::psinfo
-			# or any other function directly.  (Even though you can call
-			# Solaris::Procfs::psinfo and friends.)
-			#
-			carp "$AUTOLOAD: Must be called as a method, not as a class function";
-			return;
-		}
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _lpsinfo($_[0]);
+}
 
-#-#		print STDERR (caller 0)[3], ": Delegating to function $AUTOLOAD\n";
-		my $temp = &{ $dispatcher->{$AUTOLOAD} }( $self->{pid} );
-		return $temp;
+#-------------------------------------------------------------
+#
+sub lstatus  {
 
-	} else {
-		carp ( 
-			(caller 0)[3]  .  
-			": Attempt to invoke nonexistant function $AUTOLOAD\n"
-		);
-		return;
-	}
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _lstatus($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub lusage  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _lusage($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub usage  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _usage($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub map  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _map($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub auxv  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _auxv($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub rmap  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _rmap($_[0]);
+}
+
+#-------------------------------------------------------------
+#
+sub lwp  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /^\D$/;
+	return _lwp($_[0]);
 }
 
 
@@ -515,24 +340,39 @@ It may not even build on other systems.
 
 =head1 EXAMPLES
 
-There are three different ways to invoke the functions in this module:
+There are several different ways to invoke the functions in this module:
 as object methods, as functions, or as a tied hash. 
-
-As object methods:
-
-	use Solaris::Procfs;
-	my $p = new Solaris::Procfs;
-	my $data = $p->psinfo($pid);
 
 As functions:
 
-	(not yet fully implemented)
+	use Solaris::Procfs;
+	my $psinfo = Solaris::Procfs::psinfo( $pid );
 
-As a tied hash:
+As exported functions:
+
+	use Solaris::Procfs (:procfiles);
+	my $psinfo = psinfo( $pid );
+
+As process objects:
 
 	use Solaris::Procfs;
-	my $p = new Solaris::Procfs;
-	$p->{$pid}->{psinfo};
+	use Solaris::Procfs::Process;
+	my $p = new Solaris::Procfs::Process $pid;
+	my $data = $p->psinfo;
+
+As process objects with tied hashes:
+
+	use Solaris::Procfs;
+	use Solaris::Procfs::Process;
+	my $p = new Solaris::Procfs::Process $pid;
+	my $data = $p->{psinfo};
+
+As a filesystem object with tied hashes:
+
+	use Solaris::Procfs;
+	use Solaris::Procfs::Filesystem;
+	my $p = new Solaris::Procfs::Filesystem;
+	my $data = $p->{psinfo}->{$pid};
 
 =head1 FUNCTIONS
 
@@ -550,7 +390,10 @@ These functions can also be accessed implcitly as elements
 in a tied hash.  When used this way, each process can be
 accessed as if it were one giant Perl structure, containing
 all the data related to that process id in the files
-under /proc/{id}. 
+under /proc/{pid}.  To do this, you must use either the
+Solaris::Procfs::Process or the Solaris::Procfs::Filesystem
+modules.  If you only use the Solaris::Procfs module,
+then you can only use the function-oriented interface. 
 
 =head2 as
 
@@ -685,6 +528,12 @@ by the PCWATCH control operation.
 
 =over 4
 
+=item * Version 0.14
+
+	Separated the Filesystem and Process modules from the 
+	main Procfs module.  So Procfs.pm now contains 
+	no object-oriented code.
+
 =item * Version 0.10
 
 	Initial release on CPAN
@@ -697,12 +546,12 @@ by the PCWATCH control operation.
 
 =item *
 
-Improve the documentation, test scripts and 
-sample scripts.
+Implement more graceful error handling and error messages. 
 
 =item *
 
-Finish writing the Perl interface functions in Procfs.pm. 
+Improve the documentation, test scripts and 
+sample scripts.
 
 =item *
 

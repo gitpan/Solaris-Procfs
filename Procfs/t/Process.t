@@ -6,9 +6,10 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..2\n"; }
+BEGIN { $| = 1; print "1..1\n"; }
 END {print "not ok 1\n" unless $loaded;}
-use Solaris::Procfs qw(:procfiles);
+use Solaris::Procfs;
+use Solaris::Procfs::Process;
 $loaded = 1;
 print "ok 1\n";
 
@@ -18,17 +19,4 @@ print "ok 1\n";
 # (correspondingly "not ok 13") depending on the success of chunk 13
 # of the test code):
 
-
-my $psinfo = psinfo($$);
-my $euid = $psinfo->{pr_euid};
-
-if (defined($euid) and $euid =~ /^\d+$/ and $euid == $<) {
-
-	print("ok 2\n")
-} else {
-	print("not ok 2");
-	print(" -- expected EUID $<");
-	print(" got '$euid'\n") if defined $euid;
-	print(" got the undefined value\n") unless defined $euid;
-}
-
+Solaris::Procfs::_hello();

@@ -296,7 +296,8 @@ _sigaction2hash(struct sigaction * sigaction)
 
 	/* _funcptr is a pointer to a function -- we render this as the string "NOT IMPLEMENTED".
 	 */
-	  hv_store( hash, "_funcptr", sizeof("_funcptr") - 1,   newSVpv("NOT IMPLEMENTED", 0) , 0);
+	  hv_store( hash, "_funcptr", sizeof("_funcptr") - 1,   
+		perl_get_sv( "Solaris::Procfs::not_implemented", 0), 0);
 
 
 	return ( newRV_noinc( (SV*) hash ) );
@@ -505,6 +506,7 @@ _get_ttyname(dev_t * ttydev)
 	SV*   ttynum   = newSViv(* ttydev);
 	SV**  ttyname;
 	HV*   Ttydevs  = perl_get_hv( "Solaris::Procfs::TTYDEVS", 0);
+	STRLEN len;
 
 	if (*ttydev == PRNODEV) {
 
@@ -515,7 +517,7 @@ _get_ttyname(dev_t * ttydev)
 
 		/* Look up the ttydev in the Ttydevs hash */
 		Ttydevs != NULL &&
-		(ttyname = hv_fetch( Ttydevs, SvPV(ttynum, PL_na), sv_len(ttynum), 0)) != NULL
+		(ttyname = hv_fetch( Ttydevs, SvPV(ttynum, len), sv_len(ttynum), 0)) != NULL
 	) {
 		return *ttyname;
 
@@ -573,10 +575,15 @@ _psinfo2hash(psinfo_t * psinfo)
 	 */
 	if (Pid != (int) getpid() ) {
 
+		hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+			perl_get_sv( "Solaris::Procfs::not_this_process", 0), 0);
+		hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+			perl_get_sv( "Solaris::Procfs::not_this_process", 0), 0);
+
 		/* we use hv_fetch to store the undefined value 
-		 */
 		hv_fetch(hash, "pr_argv", sizeof("pr_argv") - 1, 1 );
 		hv_fetch(hash, "pr_envp", sizeof("pr_envp") - 1, 1 );
+		*/
 
 	} else {
 
@@ -649,7 +656,9 @@ _auxv2hash(auxv_t * auxv)
 
 	sprintf(address, "%08X", auxv->a_un.a_ptr); 
 	hv_store(a_un, "a_ptr", sizeof("a_ptr") - 1, newSVpv(address, 0), 0); 
-	hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, newSVpv( "NOT IMPLEMENTED", 0) , 0);
+	/*hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, newSVpv( "NOT IMPLEMENTED", 0) , 0);*/
+	hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, 
+		perl_get_sv( "Solaris::Procfs::not_implemented", 0), 0);
 
 	hv_store(hash, "a_un",  sizeof("a_un")  - 1, newRV_noinc( (SV*) a_un ), 0 );
 
@@ -739,7 +748,20 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 
 	} else {
 
-		printf("Could not open file %s\n",filepath);
+		printf("Could not open file %s (error %d: %s)\n",
+			filepath, errno, strerror(errno));
+
+		if (errno == EACCES) {
+
+	  		retval = perl_get_sv( "Solaris::Procfs::NOT_OWNER", 0);
+
+		} else if (errno == ENOENT) {
+
+	  		retval = perl_get_sv( "Solaris::Procfs::FILE_NOT_FOUND", 0);
+
+		} else {
+	  		retval = perl_get_sv( "Solaris::Procfs::CANNOT_READ_FILE", 0);
+		}
 	}
 	close(fdesc);
 

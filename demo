@@ -2,8 +2,12 @@
 
 use ExtUtils::testlib;
 use Solaris::Procfs;
+use Solaris::Procfs::Filesystem;
 use Data::Dumper;
 use lib '.';
+
+my $debuglevel = shift @ARGV;
+$Solaris::Procfs::DEBUG = defined $debuglevel ? $debuglevel : 1;
 
 use strict;
 
@@ -46,7 +50,7 @@ chomp($prompt);
 print $helpmsg;
 print $prompt;
 
-my $p = new Solaris::Procfs;
+my $p = new Solaris::Procfs::Filesystem;
 
 COMMAND: while (<>) {
 

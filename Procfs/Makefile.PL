@@ -9,20 +9,6 @@ if ($sys ne "SunOS" || $rel !~ /^(5.5.1|5.6|5.7)$/)
    die("Solaris::Procfs is only supported on Solaris 2.5.1, 2.6 & 2.7\n");
    }
 
-## 5.004_04 has a hv_delete that's broken
-#my $def;
-#if ($] < 5.00405)
-#   {
-#   print << "EOF";
-#ERROR: Your version of perl ($]) has a number of bugs that prevent this
-#       package from working.  If you want to use it you should upgrate to
-#       Perl 5.005_02 or above, or 5.004_05 when it becomes available - Sorry!
-#EOF
-#   exit(0);
-#   }
-
-# I'll uncomment this after a few releases, but for now leave assertions in
-# $def .= "-DNDEBUG ";
 
 # Apparently gcc doesn't set the OS rel/ver macro, so we'll do it here
 if ($Config{cc} =~ /gcc/)
@@ -32,6 +18,13 @@ if ($Config{cc} =~ /gcc/)
    elsif ($rel eq "5.7")   { $def .= "-D__SunOS_5_7 ";   }
    }
 
+
+# The procfs.h header file requires that file_offset_bits be
+# set to 32 rather than 64. 
+#
+$def .= "-D_FILE_OFFSET_BITS=32 ";
+
+
 WriteMakefile(
    NAME         => 'Solaris::Procfs',
    VERSION_FROM => 'Procfs.pm',
@@ -39,4 +32,4 @@ WriteMakefile(
    INC          => '-Iinclude',
    OBJECT       => '$(O_FILES)',
    DEFINE       => $def,
-   );
+  );

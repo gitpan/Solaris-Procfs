@@ -10,7 +10,7 @@ if ($sys ne "SunOS" || $rel !~ /^(5.6|5.7)$/)
 
 WriteMakefile(
    NAME         => 'Solaris',
-   VERSION      => '0.08',
+   VERSION      => '0.14',
    DIR          => [ 'Procfs' ],
 #   EXE_FILES    => [ 'scripts/scr' ],
 );
