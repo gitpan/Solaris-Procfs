@@ -30,6 +30,7 @@
 
 #define NEW_UIV(V) \
    (V <= IV_MAX ? newSViv(V) : newSVnv((double)V))
+
 #define NEW_HRTIME(V) \
    newSVnv((double)(V / 1000000000.0))
 
@@ -63,7 +64,14 @@
 #define SAVE_REF(H, K) \
    hv_store(H, #K, sizeof(#K) - 1, newRV_noinc( (SV*) K), 0 );
 
-int Pid;
+#define FORGET_STRUCT(H, K, N) \
+	hv_store(H, #K, sizeof(#K) - 1, newSVsv(perl_get_sv( #N, 0)), 0); \
+	SvREFCNT_dec(K);
+
+
+/* hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, */
+/* newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0); */
+/* SvREFCNT_dec(pr_argv); */
 
 
 /******************************************************************************/

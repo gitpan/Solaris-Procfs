@@ -46,7 +46,7 @@ _sigset2hash(sigset_t * sigset)
 
 	for (i = 0; i < n; i++)
 	{
-		av_push(__sigbits, (SV *) NEW_UIV( *(sigset->__sigbits + i) ));
+		av_push(__sigbits, (SV *) NEW_UIV( *(sigset->__sigbits + i) )); 
 	}
 
 	SAVE_REF(hash, __sigbits); 
@@ -297,11 +297,11 @@ _sigaction2hash(struct sigaction * sigaction)
 	/* _funcptr is a pointer to a function -- we render this as the string "NOT IMPLEMENTED".
 	 */
 	  hv_store( hash, "_funcptr", sizeof("_funcptr") - 1,   
-		perl_get_sv( "Solaris::Procfs::not_implemented", 0), 0);
-
+		newSVsv( perl_get_sv( "Solaris::Procfs::not_implemented", 0)), 0);
 
 	return ( newRV_noinc( (SV*) hash ) );
 }
+
 
 
 /* Convert a struct of type pstatus_t (sys/procfs.h) to a Perl hash */
@@ -312,25 +312,27 @@ _lwpstatus2hash(lwpstatus_t * lwpstatus)
 	AV*   pr_sysarg = newAV();
 	int i;
 
+
 	SAVE_INT32(hash, lwpstatus, pr_flags);
 	SAVE_INT32(hash, lwpstatus, pr_lwpid);
 	SAVE_INT32(hash, lwpstatus, pr_why);
 	SAVE_INT32(hash, lwpstatus, pr_what);
 	SAVE_INT32(hash, lwpstatus, pr_cursig);
 
-/*	SAVE_STRUCT(hash, lwpstatus, pr_info,    _siginfo2hash );  */
+
 	SAVE_STRUCT(hash, lwpstatus, pr_lwppend, _sigset2hash );
 	SAVE_STRUCT(hash, lwpstatus, pr_lwphold, _sigset2hash );
-
 	SAVE_STRUCT(hash, lwpstatus, pr_action, _sigaction2hash );
-
 	SAVE_STRUCT(hash, lwpstatus, pr_altstack, _stack2hash );
+/*	SAVE_STRUCT(hash, lwpstatus, pr_info,    _siginfo2hash );  */
 
 	hv_store(hash, "pr_oldcontext", sizeof("pr_oldcontext") - 1, newSViv( (IV) lwpstatus->pr_oldcontext),  0 );
 
 	SAVE_INT32(hash, lwpstatus, pr_syscall);
 	SAVE_INT32(hash, lwpstatus, pr_nsysarg);
 	SAVE_INT32(hash, lwpstatus, pr_errno);
+
+
 
 	for (i = 0; i < PRSYSARGS ; i++) /* Constant defined in sys/procfs.h */
 	{
@@ -570,10 +572,11 @@ _psinfo2hash(psinfo_t * psinfo)
 	int i;
 	char fdesc;
 	char filepath[MAXPATHLEN];
+	char error_mesg[1024 + MAXPATHLEN];
 	char **argvp = NULL;
 	char *buf = NULL;
 	char *envp;
-	uid_t	uid;
+	uid_t	euid;
 	long maxsize;
 	off_t envloc;
 	int n;
@@ -587,7 +590,7 @@ _psinfo2hash(psinfo_t * psinfo)
 	SAVE_INT32(hash, psinfo, pr_uid);
 	SAVE_INT32(hash, psinfo, pr_euid);
 	SAVE_INT32(hash, psinfo, pr_gid);
-/*	SAVE_INT32(hash, psinfo, pr_addr);  */
+/*	SAVE_INT32(hash, psinfo, pr_addr);  */ 
 	SAVE_INT32(hash, psinfo, pr_size);
 	SAVE_INT32(hash, psinfo, pr_rssize);
 
@@ -615,8 +618,8 @@ _psinfo2hash(psinfo_t * psinfo)
 	 * be either root or the owner of the process.  Otherwise you will not be able
 	 * to open the processes memory.
 	 */
-	uid = geteuid();
-	if ((uid == 0) || (uid == psinfo->pr_euid)) {
+	euid = geteuid();
+	if ((euid == 0) || (euid == psinfo->pr_euid)) {
 
 		/*
 		 * Find the maximum length of the ARG information.
@@ -628,10 +631,11 @@ _psinfo2hash(psinfo_t * psinfo)
 				newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
 			hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
 				newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
-    		}
+		}
 
 		/* 
-		 * We should be able to open up the address space to find out
+		 * If we are root, or if we are opening our own process space,
+		 * then we should be able to open up the address space to find out
 		 * the arguments and the environment for the process.
 		 *
 		 * They are located at the memory locations specified by psinfo->pr_argv and psinfo->pr_envp
@@ -643,15 +647,18 @@ _psinfo2hash(psinfo_t * psinfo)
 		 *
 		 */
 		sprintf(filepath, "/proc/%d/%s", psinfo->pr_pid,"as");
-		if ( (fdesc = open(filepath, O_RDONLY)) > -1 ) {
+		if ( (fdesc = open(filepath, O_RDONLY)) < 0 ) {
+
+			sprintf(error_mesg, "Error opening file /proc/%d/%s", psinfo->pr_pid,"as");
+			perror(error_mesg);
+			FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::not_owner);
+			FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::not_owner);
+
+		} else {
 
 			/*
 			 * First find all of the command line arguments
-			 */
-
-
-			/*
-			 * the memory location for *argv[]
+			 * (the memory location for *argv[])
 			 */
 
 			/*
@@ -663,12 +670,8 @@ _psinfo2hash(psinfo_t * psinfo)
 			if (pread(fdesc,argvp,(sizeof(char *) * (psinfo->pr_argc + 1)),psinfo->pr_argv) <= 0) {
 				perror("pread when getting command line arguments from memory for process");
 				close(fdesc);
-				hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-				hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-				SvREFCNT_dec(pr_argv);
-				SvREFCNT_dec(pr_envp);
+				FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::read_failed);
+				FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::read_failed);
 			} else {
 
 				/*
@@ -679,23 +682,15 @@ _psinfo2hash(psinfo_t * psinfo)
 				if (buf == NULL) {
 					perror("malloc failed for initial storage buffer");
 					close(fdesc);
-					hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-						newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
-					hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-						newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
-					SvREFCNT_dec(pr_argv);
-					SvREFCNT_dec(pr_envp);
+					FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::insufficient_memory);
+					FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::insufficient_memory);
 				} else {
 					for (n = 0; n < psinfo->pr_argc; n++) {
 						if (pread(fdesc,buf,maxsize-1,(off_t)argvp[n]) <= 0) {
 							perror("pread error reading command line arguments");
 							close(fdesc);
-							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							SvREFCNT_dec(pr_argv);
-							SvREFCNT_dec(pr_envp);
+							FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::read_failed);
+							FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::read_failed);
 						} else {
 							av_push(pr_argv, newSVpv(   buf , 0   ));
 						}
@@ -711,23 +706,15 @@ _psinfo2hash(psinfo_t * psinfo)
 				if (pread(fdesc,&envp,sizeof(char *),envloc) <= 0) {
 					perror("pread of initial environment location");
 					close(fdesc);
-					hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-					hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-						newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-					SvREFCNT_dec(pr_argv);
-					SvREFCNT_dec(pr_envp);
+					FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::read_failed);
+					FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::read_failed);
 				} else {
 					do {
 						if (pread(fdesc,buf,maxsize-1,(off_t)envp) <= 0) {
 							perror("pread of environment pointer location");
 							close(fdesc);
-							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							SvREFCNT_dec(pr_argv);
-							SvREFCNT_dec(pr_envp);
+							FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::read_failed);
+							FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::read_failed);
 							continue;
 						}
 					
@@ -740,12 +727,8 @@ _psinfo2hash(psinfo_t * psinfo)
 						if (pread(fdesc,&envp,sizeof(char *),envloc) <= 0) {
 							perror("pread of environment location");
 							close(fdesc);
-							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
-							SvREFCNT_dec(pr_argv);
-							SvREFCNT_dec(pr_envp);
+							FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::read_failed);
+							FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::read_failed);
 							continue;
 						}
 					} while (envp != NULL );
@@ -754,25 +737,22 @@ _psinfo2hash(psinfo_t * psinfo)
 			SAVE_REF(hash, pr_envp);
 
 			close(fdesc);
-		}
-	} else { 
+
+		} /* end if ( (fdesc = open(filepath, O_RDONLY)) < 0 )  */
+
+	} else {   
 		/*
 		 * this should only happen if the process died or you don't have permission to
 		 * read the "/proc/<pid>/as file.  Which means you are either not root or
 		 * you are not the owner of the process
 				av_push(pr_envp, newSVpv(   buf , 0   ));
 		 */
+		FORGET_STRUCT(hash, pr_argv, Solaris::Procfs::not_owner);
+		FORGET_STRUCT(hash, pr_envp, Solaris::Procfs::not_owner);
 
-		hv_store(hash, "pr_argv", sizeof("pr_argv") - 1,
-			newSVsv(perl_get_sv( "Solaris::Procfs::not_owner", 0)), 0);
-		hv_store(hash, "pr_envp", sizeof("pr_envp") - 1,
-			newSVsv(perl_get_sv( "Solaris::Procfs::not_owner", 0)), 0);
-
-		SvREFCNT_dec(pr_argv);
-		SvREFCNT_dec(pr_envp);
-	}
+	} /* end if ((euid == 0) || (euid == psinfo->pr_euid))  */
 	
-	SAVE_STRUCT(hash, psinfo, pr_lwp,  _lwpsinfo2hash );
+	SAVE_STRUCT(hash, psinfo, pr_lwp,  _lwpsinfo2hash );  
 	free(buf);
 	free(argvp);
 
@@ -862,7 +842,7 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 	/* For debugging */
 	/* printf("/proc/%d/%s\n", pid, filename); */
 
-	Pid = pid;
+	/* Pid = pid; */
 
 	sprintf(filepath, "/proc/%d/%s", pid, filename);
 
@@ -1183,6 +1163,9 @@ _lwp(pid)
 
 	DIR             *dp;
 	struct dirent   *de;
+#ifdef _POSIX_PTHREAD_SEMANTICS
+	struct dirent   *dr;
+#endif
 
 	/* We need a big buffer here, because a dirent struct
 	 * contains a variable-length name field.
@@ -1209,34 +1192,42 @@ _lwp(pid)
 
 	de = (struct dirent *) de_buffer;
 
-	while (( (struct dirent *) readdir_r(dp,de)) != NULL) {
+	while (
+#ifdef _POSIX_PTHREAD_SEMANTICS
+		( (struct dirent *) readdir_r(dp,de,&dr)) != NULL
+#else
+		( (struct dirent *) readdir_r(dp,de)) != NULL
+#endif
+	) {
 
 		/* Only look at pid dirs */
 		if (de->d_name[0] >= '0' && de->d_name[0] <= '9') {
-			HV* lwp=newHV();
-			sprintf( filepath, "lwp/%s/lwpstatus", de->d_name );
-			val = read_proc_file( 
-				1, (void *) &lwpstatus, sizeof(lwpstatus), 
-				filepath, pid, (SV* (*)(void *)) &_lwpstatus2hash);
+			HV* lwp = newHV();
 
-			if (val != NULL)
-				hv_store( lwp, "lwpstatus", sizeof("lwpstatus") - 1, val, 0 );
+			sprintf( filepath, "lwp/%s/lwpstatus", de->d_name );
+			val = read_proc_file(  
+				1, (void *) &lwpstatus, sizeof(lwpstatus),  
+				filepath, pid, (SV* (*)(void *)) &_lwpstatus2hash); 
+
+			if (val != NULL)  
+				hv_store( lwp, "lwpstatus", sizeof("lwpstatus") - 1, val, 0 ); 
 
 			sprintf( filepath, "lwp/%s/lwpsinfo", de->d_name );
 			val = read_proc_file( 
 				1, (void *) &lwpsinfo, sizeof(lwpsinfo), 
 				filepath, pid, (SV* (*)(void *)) &_lwpsinfo2hash);
 
-			if (val != NULL)
+			if (val != NULL) 
 				hv_store( lwp, "lwpsinfo", sizeof("lwpsinfo") - 1, val, 0 );
+			
 
 			sprintf( filepath, "lwp/%s/lwpusage", de->d_name );
-			val = read_proc_file( 
-				1, (void *) &prusage, sizeof(prusage), 
-				filepath, pid, (SV* (*)(void *)) &_prusage2hash);
-
+			val = read_proc_file(    
+				1, (void *) &prusage, sizeof(prusage),    
+				filepath, pid, (SV* (*)(void *)) &_prusage2hash);   
+ 
 			if (val != NULL)
-				hv_store( lwp, "lwpusage", sizeof("lwpusage") - 1, val, 0 );
+				hv_store( lwp, "lwpusage", sizeof("lwpusage") - 1, val, 0 );   
 
 			hv_store( hash, de->d_name, strlen(de->d_name), newRV_noinc( (SV*) lwp  ), 0 );
 		}

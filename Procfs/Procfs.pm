@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.25';
+$VERSION     = '0.26';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -631,6 +631,12 @@ Here is an example from the file examples/pstop:
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.26
+
+	Made some changes to the macros.
+	Also applied a small patch to the lwp() function, 
+	provided by Stephen Youndt. Thanks!
 
 =item * Version 0.25
 
