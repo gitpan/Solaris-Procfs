@@ -350,7 +350,7 @@ _lwpstatus2hash(lwpstatus_t * lwpstatus)
 }
 
 
-/* Convert a struct of type pstatus_t (sys/procfs.h) to a Perl hash */
+/* Convert a struct of type prmap_t (sys/procfs.h) to a Perl hash */
 SV *
 _prmap2hash(prmap_t * prmap) 
 {
@@ -366,6 +366,38 @@ _prmap2hash(prmap_t * prmap)
 	/*SAVE_INT32(hash,  prmap, pr_mflags);*/
 	SAVE_HEXVAL(hash, prmap, pr_mflags, address);
 	SAVE_INT32(hash,  prmap, pr_pagesize);
+	SAVE_INT32(hash,  prmap, pr_shmid);
+
+	return ( newRV_noinc( (SV*) hash ) );
+}
+
+/* Convert a struct of type prxmap_t (sys/procfs.h) to a Perl hash */
+SV *
+_prxmap2hash(prxmap_t * prxmap) 
+{
+	HV*   hash = newHV();
+	char  address[ HEXVAL_AS_STRING ];
+
+	SAVE_INT32(hash,  prxmap, pr_size);
+	SAVE_HEXVAL(hash, prxmap, pr_vaddr, address);
+	SAVE_STRING(hash, prxmap, pr_mapname );
+
+	SAVE_INT(hash, prxmap, pr_offset);
+
+	/*SAVE_INT32(hash,  prxmap, pr_mflags);*/
+	SAVE_HEXVAL(hash, prxmap, pr_mflags, address);
+	SAVE_INT32(hash,  prxmap, pr_pagesize);
+	SAVE_INT32(hash,  prxmap, pr_shmid);
+	SAVE_INT32(hash,  prxmap, pr_dev);
+	SAVE_INT64(hash,  prxmap, pr_ino);
+	SAVE_UINT32(hash,  prxmap, pr_anon);
+	SAVE_UINT32(hash,  prxmap, pr_ashared);
+	SAVE_UINT32(hash,  prxmap, pr_aref);
+	SAVE_UINT32(hash,  prxmap, pr_amod);
+	SAVE_UINT32(hash,  prxmap, pr_vnode);
+	SAVE_UINT32(hash,  prxmap, pr_vshared);
+	SAVE_UINT32(hash,  prxmap, pr_vref);
+	SAVE_UINT32(hash,  prxmap, pr_vmod);
 
 	return ( newRV_noinc( (SV*) hash ) );
 }
@@ -921,6 +953,22 @@ _map(pid)
 	RETVAL = read_proc_file( 
 		0, (void *) &prmap, sizeof(prmap), 
 		"map", pid, (SV* (*)(void *)) &_prmap2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
+	OUTPUT:
+	RETVAL
+
+SV *
+_xmap(pid) 
+	int             pid;
+	PREINIT:
+	prxmap_t        prxmap;
+	CODE:
+
+	RETVAL = read_proc_file( 
+		0, (void *) &prxmap, sizeof(prxmap), 
+		"xmap", pid, (SV* (*)(void *)) &_prxmap2hash);
 
 	if (RETVAL == NULL) XSRETURN_UNDEF;
 

@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.19';
+$VERSION     = '0.20';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -31,7 +31,7 @@ $DEBUG       = 1;
 
 		fd prcred sigact status lstatus psinfo 
 		lpsinfo usage lusage map rmap lwp auxv 
-		proot pcwd
+		proot pcwd xmap
 );
 
 %EXPORT_TAGS = (
@@ -39,7 +39,7 @@ $DEBUG       = 1;
 	procfiles => [ qw(
 		fd prcred sigact status lstatus psinfo 
 		lpsinfo usage lusage map rmap lwp auxv 
-		proot pcwd
+		proot pcwd xmap
 	) ],
 );
 
@@ -263,6 +263,14 @@ sub map  {
 
 #-------------------------------------------------------------
 #
+sub xmap  {
+
+	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
+	return _xmap($_[0]);
+}
+
+#-------------------------------------------------------------
+#
 sub auxv  {
 
 	return if not defined $_[0] or ref($_[0]) or $_[0] =~ /\D/;
@@ -432,10 +440,12 @@ aux vector in an array of auxv_t structures (see <sys/auxv.h>).
 
 =head2 ctl
 
-Not implemented.  The 'ctl' file is a write-only file to which 
-structured messages are written directing the system to change 
-some aspect of the process's state or control its behavior 
-in some way. 
+Not implemented as a function.  The 'ctl' file is a write-only file 
+to which structured messages are written directing the system to change 
+some aspect of the process's state or control its behavior in some way.  
+This file somewhat like a device file.  See the examples
+directory 'eg1' included in this package for some simple 
+examples showing how to write to this file. 
 
 =head2 cwd or pcwd
 
@@ -549,6 +559,12 @@ Not yet implemented.  The 'watch' file contains an array of
 prwatch structures, one for each watched area established 
 by the PCWATCH control operation. 
 
+=head2 xmap
+
+The 'xmap' file contains information about the virtual address map 
+of the process.  This file is not documented in the proc manpage.
+
+
 =head1 OTHER FUNCTIONS
 
 =head2 writectl
@@ -595,6 +611,13 @@ Here is an example from the file eg1/pstop:
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.20
+
+	Thomas Whateley sent a patch with functions for
+	accessing the /proc/<pid>/xmap file.
+	Dominic Dunlop submitted a small patch to the XS function
+	which accesses the map file.
 
 =item * Version 0.19
 
@@ -667,6 +690,13 @@ I used his method for keeping track of TTY numbers.
 
 Thanks to Kennth Skaar (kenneths@regina.uio.no) for fixing
 some memory leaks and teaching me to count (references).  
+
+Thanks to Thomas Whateley for sending a patch with functions for
+accessing the /proc/<pid>/xmap file.
+
+Thanks to Dominic Dunlop for submitting a patch to the functions
+which access the map file.
+
 
 =head1 AUTHOR
 

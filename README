@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.19 
+README file for Solaris::Procfs 0.20 
 
 
 NAME
@@ -115,9 +115,12 @@ FUNCTIONS
 
   ctl
 
-    Not implemented. The 'ctl' file is a write-only file to which structured
-    messages are written directing the system to change some aspect of the
-    process's state or control its behavior in some way.
+    Not implemented as a function. The 'ctl' file is a write-only file to
+    which structured messages are written directing the system to change
+    some aspect of the process's state or control its behavior in some way.
+    This file somewhat like a device file. See the examples directory 'eg1'
+    included in this package for some simple examples showing how to write
+    to this file.
 
   cwd or pcwd
 
@@ -231,6 +234,11 @@ FUNCTIONS
     structures, one for each watched area established by the PCWATCH control
     operation.
 
+  xmap
+
+    The 'xmap' file contains information about the virtual address map of
+    the process. This file is not documented in the proc manpage.
+
 OTHER FUNCTIONS
   writectl
 
@@ -270,6 +278,12 @@ ERROR HANDLING
             writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
 CHANGES
+    * Version 0.20
+                Thomas Whateley sent a patch with functions for
+                accessing the /proc/<pid>/xmap file.
+                Dominic Dunlop submitted a small patch to the XS function
+                which accesses the map file.
+
     * Version 0.19
                 Kenneth Skaar sent a patch which fixed some memory leaks.
                 Updated the documentation.
@@ -319,6 +333,12 @@ THANKS
 
     Thanks to Kennth Skaar (kenneths@regina.uio.no) for fixing some memory
     leaks and teaching me to count (references).
+
+    Thanks to Thomas Whateley for sending a patch with functions for
+    accessing the /proc/<pid>/xmap file.
+
+    Thanks to Dominic Dunlop for submitting a patch to the functions which
+    access the map file.
 
 AUTHOR
     John Nolan jpnolan@sonic.net 1999-2001. A copyright statment is

@@ -18,7 +18,7 @@ my (%funcs,@funcs);
 
 @funcs = qw(
 
-	auxv cwd fd lpsinfo lstatus lusage lwp map 
+	auxv cwd fd lpsinfo lstatus lusage lwp map xmap 
 	prcred psinfo status rmap root sigact status usage
 );
 foreach (@funcs) { $funcs{$_} = 1; }
