@@ -39,9 +39,9 @@
    hv_store(H, #K, sizeof(#K) - 1, newSVpv(S->K, 0), 0)
 
 #define SAVE_HEXVAL(H, S, K, B) \
-   sprintf(B, "%08X", S->K); hv_store(H, #K, sizeof(#K) - 1, newSVpv(B, 0), 0);   
+   sprintf(B, "0x%08X", S->K); hv_store(H, #K, sizeof(#K) - 1, newSVpv(B, 0), 0);   
 #define SAVE_HEXVAL_TO_LIST(L, K, B) \
-   sprintf(B, "%08X", K); av_push(L, newSVpv(B, 0));       
+   sprintf(B, "0x%08X", K); av_push(L, newSVpv(B, 0));       
 
 #define SAVE_INT32(H, S, K) \
    hv_store(H, #K, sizeof(#K) - 1, newSViv(S->K), 0)
@@ -62,12 +62,6 @@
    hv_store(H, #K, sizeof(#K) - 1, F( & S->K ), 0); 
 #define SAVE_REF(H, K) \
    hv_store(H, #K, sizeof(#K) - 1, newRV_noinc( (SV*) K), 0 );
-
-/*
-#ifndef PL_na
-#define PL_na na
-#endif
-*/
 
 int Pid;
 

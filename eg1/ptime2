@@ -18,7 +18,6 @@ if ($pid = fork()) {
 	if ($rc < 0) { die "Process already exited"; }
 
 	my $usage  = usage($pid);
-	my $psinfo = psinfo($pid);
 
 	my $realtime = 
 		$usage->{pr_rtime}->{tv_sec} +
@@ -42,9 +41,23 @@ if ($pid = fork()) {
 	#
 	$|++;
 
-	# Turn on microstate accounting
+
+	# Open the ctl file with a flag of 1, which means write-only.  
 	#
-	writectl($$,PCSET,PR_MSACCT);
+	sysopen(FILE,"/proc/self/ctl",1)
+		or die "Could not open file /proc/self/ctl for writing: $!";
+
+	# Pack the flags into a series of signed long integers 
+	#
+	my $flags   = pack("l*",PCSET,PR_MSACCT);
+	my $length  = length $flags;
+
+	# Now use syswrite to write the flags to the ctl file. 
+	# This turns on microstate accounting
+	#
+	syswrite(FILE,$flags,$length);
+
+	close FILE;
 
 	# Exec the target process
 	#

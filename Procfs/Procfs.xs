@@ -566,12 +566,14 @@ _psinfo2hash(psinfo_t * psinfo)
 	SAVE_STRUCT(hash, psinfo, pr_ctime,  _timespec2hash );
 	SAVE_STRING(hash, psinfo, pr_fname );
 	SAVE_STRING(hash, psinfo, pr_psargs );
-	SAVE_INT32(hash, psinfo, pr_wstat);
-	SAVE_INT32(hash, psinfo, pr_argc);
+	SAVE_INT32( hash, psinfo, pr_wstat);
+	SAVE_INT32( hash, psinfo, pr_argc);
 
 	/* Don't attempt to fetch pr_argv or pr_envp unless the process
 	 * which we're looking at happens to be this process.  
 	 * If we try to to look at some other process, then we'll segfault. 
+	 *
+	 * Pid is a global variable (yikes!) defined in Procfs.h
 	 */
 	if (Pid != (int) getpid() ) {
 
@@ -623,7 +625,6 @@ _prcred2hash(prcred_t * prcred)
 	HV*   hash = newHV();
 	AV*   groups = newAV();
 	gid_t i;
-	gid_t * gidptr = prcred->pr_groups;
 
 	SAVE_INT32(hash, prcred, pr_euid);
 	SAVE_INT32(hash, prcred, pr_ruid);
@@ -637,9 +638,7 @@ _prcred2hash(prcred_t * prcred)
 
 	for (i = 0; i < prcred->pr_ngroups ; i++) 
 	{
-/*		av_push(groups, (SV *) newSViv(     prcred->pr_groups[i] ));*/
-		av_push(groups, (SV *) newSViv(  *( gidptr + i) ));
-		/* printf("i is %d, group is %d\n", i, prcred->pr_groups[i] ); */
+		av_push(groups, (SV *) newSViv(     prcred->pr_groups[i] ));
 	}
 	hv_store(hash, "pr_groups",  sizeof("pr_groups") - 1, newRV_noinc( (SV*) groups ), 0 );
 
@@ -659,7 +658,6 @@ _auxv2hash(auxv_t * auxv)
 
 	sprintf(address, "%08X", auxv->a_un.a_ptr); 
 	hv_store(a_un, "a_ptr", sizeof("a_ptr") - 1, newSVpv(address, 0), 0); 
-	/*hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, newSVpv( "NOT IMPLEMENTED", 0) , 0);*/
 	hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, 
 		perl_get_sv( "Solaris::Procfs::not_implemented", 0), 0);
 
@@ -692,7 +690,8 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 
 	int             fdesc;
 	int             bytes = 0;
-	SV*             retval = newSVpv("", 0);
+	/*SV*             retval = newSVpv("", 0);*/
+	SV*             retval = NULL;
 
 	/* Fixed-length buffer will hold the name of the file 
 	 * under the /proc hierarchy which we want to access. 
@@ -706,7 +705,7 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 
 	sprintf(filepath, "/proc/%d/%s", pid, filename);
 
-	if ((fdesc = open(filepath, O_RDONLY)) > -1 ) {
+	if ( (fdesc = open(filepath, O_RDONLY)) > -1 ) {
 
 		/* Just read in one copy of the given struct. 
 		 */
@@ -716,8 +715,10 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 			{
 				retval = func(buffer);
 			}
+			/*
 			else
 				printf("Read zero bytes from %s\n",filepath);
+			*/
 
 		/* Read in one prheader_t, then a list of structs of the given type. 
 		 */
@@ -747,23 +748,6 @@ read_proc_file(int code, void * buffer, size_t buffsize,
 				av_push(list, func(buffer));
 			}
 			retval = newRV_noinc( (SV*) list );
-		}
-
-	} else {
-
-		printf("Could not open file %s (error %d: %s)\n",
-			filepath, errno, strerror(errno));
-
-		if (errno == EACCES) {
-
-	  		retval = perl_get_sv( "Solaris::Procfs::NOT_OWNER", 0);
-
-		} else if (errno == ENOENT) {
-
-	  		retval = perl_get_sv( "Solaris::Procfs::FILE_NOT_FOUND", 0);
-
-		} else {
-	  		retval = perl_get_sv( "Solaris::Procfs::CANNOT_READ_FILE", 0);
 		}
 	}
 	close(fdesc);
@@ -797,6 +781,9 @@ _sigact(pid)
 	RETVAL = read_proc_file(
 		0, (void *) &sigact, sizeof(struct sigaction), 
 		"sigact", pid, (SV* (*)(void *)) &_sigaction2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -812,6 +799,9 @@ _status(pid)
 	RETVAL = read_proc_file( 
 		1, (void *) &pstatus, sizeof(pstatus_t), 
 		"status", pid, (SV* (*)(void *)) &_pstatus2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -831,6 +821,9 @@ _prcred(pid)
 	RETVAL = read_proc_file( 
 		1, (void *) &prcred, sizeof(prcred_t) + 32 * sizeof(gid_t), 
 		"cred", pid, (SV* (*)(void *)) &_prcred2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -847,6 +840,8 @@ _psinfo(pid)
 	RETVAL = read_proc_file( 
 		1, (void *) &psinfo, sizeof(psinfo_t), 
 		"psinfo", pid, (SV* (*)(void *)) &_psinfo2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
 
 	OUTPUT:
 	RETVAL
@@ -865,6 +860,9 @@ _lpsinfo(pid)
 	RETVAL = read_proc_file( 
 		2, (void *) &lwpsinfo, sizeof(lwpsinfo_t), 
 		"lpsinfo", pid, (SV* (*)(void *)) &_lwpsinfo2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -882,6 +880,9 @@ _lstatus(pid)
 	RETVAL = read_proc_file( 
 		2, (void *) &lwpstatus, sizeof(lwpstatus), 
 		"lstatus", pid, (SV* (*)(void *)) &_lwpstatus2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -899,6 +900,9 @@ _lusage(pid)
 	RETVAL = read_proc_file( 
 		2, (void *) &prusage, sizeof(prusage), 
 		"lusage", pid, (SV* (*)(void *)) &_prusage2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -916,6 +920,9 @@ _usage(pid)
 	RETVAL = read_proc_file( 
 		1, (void *) &prusage, sizeof(prusage), 
 		"usage", pid, (SV* (*)(void *)) &_prusage2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -934,6 +941,9 @@ _map(pid)
 	RETVAL = read_proc_file( 
 		0, (void *) &prmap, sizeof(prmap), 
 		"map", pid, (SV* (*)(void *)) &_prmap2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -951,6 +961,9 @@ _auxv(pid)
 	RETVAL = read_proc_file( 
 		0, (void *) &auxv, sizeof(auxv), 
 		"auxv", pid, (SV* (*)(void *)) &_auxv2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -958,7 +971,7 @@ _auxv(pid)
 	SvREFCNT_inc( RETVAL );
 
 
-void
+SV *
 _writectl(pid,...)
 	int         pid;
 
@@ -974,13 +987,25 @@ _writectl(pid,...)
 	}
 	sprintf(filepath,"/proc/%d/ctl", pid);
 
-	if ((fdesc = open(filepath,O_WRONLY)) < 0) 
+	if ((fdesc = open(filepath,O_WRONLY)) > -1) 
 	{
-		printf("Could not open file %s (error %d: %s)\n",
-			filepath, errno, strerror(errno));
+		int bytes_written = 0;
+
+		bytes_written = write(fdesc, args, sizeof(long) * (items - 1));
+		close(fdesc);
+
+		RETVAL = newSViv( bytes_written ); 
+
+	} else {
+		/* Return false ("") on any errors */
+		RETVAL = newSVpv("", 0);
 	}
-	write(fdesc, args, sizeof(long) * (items - 1));
-	close(fdesc);
+
+	OUTPUT:
+	RETVAL
+
+	CLEANUP:
+	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -993,6 +1018,9 @@ _rmap(pid)
 	RETVAL = read_proc_file( 
 		0, (void *) &prmap, sizeof(prmap), 
 		"rmap", pid, (SV* (*)(void *)) &_prmap2hash);
+
+	if (RETVAL == NULL) XSRETURN_UNDEF;
+
 	OUTPUT:
 	RETVAL
 
@@ -1021,11 +1049,10 @@ _lwp(pid)
 	CODE:
 
 	sprintf( filepath, "/proc/%d/lwp", pid );
-	dp = opendir(filepath);
 
-	if (dp == NULL) {
+	if ((dp = opendir(filepath)) == NULL) { 
 
-		assert(FALSE);
+		XSRETURN_UNDEF;
 	}
 
 	while ((de = readdir(dp)) != NULL) {
@@ -1037,19 +1064,25 @@ _lwp(pid)
 			val = read_proc_file( 
 				1, (void *) &lwpstatus, sizeof(lwpstatus), 
 				filepath, pid, (SV* (*)(void *)) &_lwpstatus2hash);
-			hv_store( lwp, "lwpstatus", sizeof("lwpstatus") - 1, val, 0 );
+
+			if (val != NULL)
+				hv_store( lwp, "lwpstatus", sizeof("lwpstatus") - 1, val, 0 );
 
 			sprintf( filepath, "lwp/%s/lwpsinfo", de->d_name );
 			val = read_proc_file( 
 				1, (void *) &lwpsinfo, sizeof(lwpsinfo), 
 				filepath, pid, (SV* (*)(void *)) &_lwpsinfo2hash);
-			hv_store( lwp, "lwpsinfo", sizeof("lwpsinfo") - 1, val, 0 );
+
+			if (val != NULL)
+				hv_store( lwp, "lwpsinfo", sizeof("lwpsinfo") - 1, val, 0 );
 
 			sprintf( filepath, "lwp/%s/lwpusage", de->d_name );
 			val = read_proc_file( 
 				1, (void *) &prusage, sizeof(prusage), 
 				filepath, pid, (SV* (*)(void *)) &_prusage2hash);
-			hv_store( lwp, "lwpusage", sizeof("lwpusage") - 1, val, 0 );
+
+			if (val != NULL)
+				hv_store( lwp, "lwpusage", sizeof("lwpusage") - 1, val, 0 );
 
 			hv_store( hash, de->d_name, strlen(de->d_name), newRV_noinc( (SV*) lwp  ), 0 );
 		}

@@ -13,7 +13,8 @@ package Solaris::Procfs;
 # Perl 5 distribution).
 
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT_OK %EXPORT_TAGS);
-use vars qw($WARNSTRINGS $DEBUG);
+use vars qw($WARNSTRINGS $DEBUG );
+use vars qw( $not_implemented $not_this_process );
 use strict;
 use DynaLoader;
 use Carp;
@@ -22,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.16';
+$VERSION     = '0.18';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -43,36 +44,16 @@ $DEBUG       = 1;
 );
 
 
-
 # Pull in all the flags and extra export tags.
 # This syntax is non-portable, but we are only interested
 # in Solaris systems anyway.  ;) 
 #
-require 'Solaris/Procfs/flags.pl';
-
+require 'Solaris/Procfs/include/sys/procfs.ph';
 
 get_tty_list();
 
-
-# Yuck, this ugly.  
-# This needs to be reimplemented more cleanly.  
-#
-use vars qw(
-	$NOT_OWNER 
-	$NOT_THIS_PROCESS 
-	$NOT_IMPLEMENTED
-	$CANNOT_READ_FILE
-	$FILE_NOT_FOUND
-	$NO_SUCH_PROCESS
-);
-
-$NOT_OWNER         = "NOT OWNER";
-$NOT_THIS_PROCESS  = "NOT THIS PROCESS";
-$NOT_IMPLEMENTED   = "NOT IMPLEMENTED";
-$FILE_NOT_FOUND    = "FILE NOT FOUND";
-$CANNOT_READ_FILE  = "CANNOT READ FILE";
-$NO_SUCH_PROCESS   = "NO SUCH PROCESS";
-
+$not_implemented  = "NOT IMPLEMENTED";
+$not_this_process = "";
 
 bootstrap Solaris::Procfs $VERSION;
 
@@ -128,7 +109,7 @@ sub cwd {
 	my $err = 0;
 
 	local $SIG{__WARN__} = sub { $err = 1; return; };
-	return $NOT_OWNER unless stat "/proc/$pid";
+	return unless stat "/proc/$pid";
 
 	my $hoo = Cwd::abs_path("/proc/$pid/cwd/.");
 	my $path = $hoo;
@@ -152,7 +133,7 @@ sub root {
 
 	my $pid = $_[0];
 
-	return $NOT_OWNER unless stat "/proc/$pid";
+	return unless stat "/proc/$pid";
 
 	my $path = Cwd::abs_path("/proc/$pid/root/.");
 
@@ -187,7 +168,7 @@ sub fd  {
 	unless (opendir (DIR, "/proc/$pid/fd") ) {
 
 		carp "Couldn't open directory /proc/$pid/fd : $!";
-		return $NOT_OWNER;
+		return;
 	}
 
 	foreach ( grep /^\d+$/, readdir DIR ) {
@@ -572,9 +553,46 @@ for a given process ($pid):
 	use Solaris::Procfs qw(writectl);
 	writectl($pid,PCSET,PR_MSACCT); 
 
+=head1 ERROR HANDLING
+
+Most of these functions are essentially wrappers around the system calls
+open(), read() and write().  Basically, we are reading and writing to 
+the files under C</proc>.  If any of these system calls fail, they will 
+set the system errno variable, and the function calling them
+will just return.  
+
+When using these functions, you should check the return value just
+like you would check the return value of a system call.  Make sure
+that that the return value is defined before using it.  If the value
+is not defined, print out the variable C<$!> for a verbose description 
+of the error.  The most likely error message will be "No such file or directory" 
+if the process you are accessing does not exist, or "Permission denied" 
+or "Bad file number" if you do not have permisssion to access the file.  
+
+Here is an example from the file eg1/ptree:
+
+	my $psinfo = psinfo($pid);
+
+	unless (defined $psinfo and ref $psinfo eq 'HASH') {
+
+		warn "Cannot get psinfo on process $pid: $!\n";
+	}
+
+Here is an example from the file eg1/pstop:
+
+	writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
+
+
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.18
+
+	Cleaned up the error handling.
+	Created regression tests. 
+	Added several more example scripts. 
+	Reorganized files in the install package. 
 
 =item * Version 0.16
 
@@ -604,11 +622,6 @@ for a given process ($pid):
 Improve the documentation, test scripts and sample scripts.  
 Create examples of the use of the writectl() functions.   
 Add and test a writelwp() function similar to writectl().
-
-=item *
-
-Implement more graceful error handling and error messages. 
-Currently, errors are handled poorly and inconsistenly.  :(
 
 =item *
 

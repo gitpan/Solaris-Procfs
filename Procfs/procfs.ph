@@ -53,32 +53,33 @@ use vars qw(
 @pr_wflags = qw( WA_READ WA_WRITE WA_EXEC WA_TRAPAFTER );
 @pr_npage_bytes  = qw( PG_REFERENCED PG_MODIFIED PG_HWMAPPED );
 
-@EXPORT_OK   = (
-
-	@EXPORT_OK, 
-
+@all_flags = (
 	@control_codes,
 	@pcrun_operand_flags,
 	@pr_flags,
 	@pcset_flags,
-	@pr_why_flags ,
+	@pr_why_flags,
 	@protection_flags,
 	@pr_wflags,
-	@pr_npage_bytes ,
-) ;
+	@pr_npage_bytes,
+);
+
+push @EXPORT_OK, @all_flags;
 
 %EXPORT_TAGS = (
 
 	%EXPORT_TAGS,
 
-	control_codes => [ @control_codes ],
-	pcrun_operand_flags => [ @pcrun_operand_flags ],
-	pr_flags => [ @pr_flags ],
-	pcset_flags => [ @pcset_flags ],
-	pr_why_flags  => [ @pr_why_flags ],
-	protection_flags => [ @protection_flags ],
-	pr_wflags => [ @pr_wflags ],
-	pr_npage_bytes => [ @pr_npage_bytes ],
+	control_codes          => [ @control_codes        ],
+	pcrun_operand_flags    => [ @pcrun_operand_flags  ],
+	pr_flags               => [ @pr_flags             ],
+	pcset_flags            => [ @pcset_flags          ],
+	pr_why_flags           => [ @pr_why_flags         ],
+	protection_flags       => [ @protection_flags     ],
+	pr_wflags              => [ @pr_wflags            ],
+	pr_npage_bytes         => [ @pr_npage_bytes       ],
+
+	procfs_h               => [ @all_flags            ],
 );
 
 #-------------------------------------------------------------

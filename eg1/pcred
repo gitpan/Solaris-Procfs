@@ -11,11 +11,13 @@ die "usage: $0 pid\n" unless @ARGV;
 
 foreach $pid (@ARGV) {
 
+	warn "$0: no such process: $pid\n" unless $pid =~ /\d+/;
+
 	my $creds = prcred($pid);
 
-	unless (defined $creds and ref($creds) eq 'HASH' and $pid =~ /\d+/) {
+	unless (defined $creds and ref($creds) eq 'HASH') {
 
-		print "$0: no such process: $pid\n";
+		warn "Can't open /proc/$pid/cred: $!\n";
 		next;
 	}
 

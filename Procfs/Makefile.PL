@@ -33,10 +33,12 @@ $def .= "-D_FILE_OFFSET_BITS=32 ";
 WriteMakefile(
    NAME         => 'Solaris::Procfs',
    VERSION_FROM => 'Procfs.pm',
-#   PM		=> {
-#			'Procfs.pm' => '$(INST_LIBDIR)/Procfs.pm',
-#			'flags.pl' => '$(INST_LIBDIR)/flags.pl'
-#		}
+   PM		=> {
+			'Procfs.pm' =>     '$(INST_LIBDIR)/Procfs.pm',
+			'Process.pm' =>    '$(INST_LIBDIR)/Procfs/Process.pm',
+			'Filesystem.pm' => '$(INST_LIBDIR)/Procfs/Filesystem.pm',
+			'procfs.ph' =>     '$(INST_LIBDIR)/Procfs/include/sys/procfs.ph'
+		},
    LIBS         => [ '' ],
    INC          => '-Iinclude',
    OBJECT       => '$(O_FILES)',

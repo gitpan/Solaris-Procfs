@@ -63,9 +63,9 @@ sub FETCH {
 		if (-d "/proc/$index") {
 
 			if (
-				not exists  $self->{$index}  or 
-				not defined $self->{$index} or
-				$self->{$index}  eq ''
+				not exists  $self->{$index}       or 
+				not defined $self->{$index}       or
+				            $self->{$index} eq ''
 			) {
 
 				print STDERR (caller 0)[3], 
@@ -80,9 +80,9 @@ sub FETCH {
 
 		}
 
-				print STDERR (caller 0)[3], 
-					": No proc directory for pid $index\n"
-					if $DEBUG >= 2;
+		print STDERR (caller 0)[3], 
+			": No proc directory for pid $index\n"
+				if $DEBUG >= 2;
 
 		return;
 

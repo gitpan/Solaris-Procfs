@@ -13,7 +13,8 @@ package Solaris::Procfs::Process;
 # Perl 5 distribution).
 
 use vars qw($VERSION @ISA $AUTOLOAD);
-use vars qw($DISPATCHER $FUNCTION_LIST $NON_OWNER_FUNCTION_LIST $DEBUG);
+use vars qw($DISPATCHER $NON_OWNER_FUNCTION_LIST $FUNCTION_LIST $DEBUG);
+use vars qw(%DEFAULTPARAMS);
 
 use Carp;
 use strict;
@@ -24,6 +25,10 @@ require Exporter;
 *DEBUG          = *Solaris::Procfs::DEBUG;
 @ISA            = qw();
 
+%DEFAULTPARAMS = (
+
+	autoupdate => 0,
+);
 
 #-------------------------------------------------------------
 # Dispatch hash, used by the AUTOLOAD function of 
@@ -32,30 +37,56 @@ require Exporter;
 #
 $DISPATCHER = {
 
+	# Dispatch to perl functions
+	#
 	'root'      => \&Solaris::Procfs::root,
 	'cwd'       => \&Solaris::Procfs::cwd,
 	'fd'        => \&Solaris::Procfs::fd,
+	'writectl'  => \&Solaris::Procfs::writectl,
 
+	# Dispatch to XS functions directly
+	#
+	'auxv'      => \&Solaris::Procfs::_auxv,
+	'lpsinfo'   => \&Solaris::Procfs::_lpsinfo,
+	'lstatus'   => \&Solaris::Procfs::_lstatus,
+	'lusage'    => \&Solaris::Procfs::_lusage,
+	'lwp'       => \&Solaris::Procfs::_lwp,
+	'map'       => \&Solaris::Procfs::_map,
 	'prcred'    => \&Solaris::Procfs::_prcred,
+	'psinfo'    => \&Solaris::Procfs::_psinfo,
+	'rmap'      => \&Solaris::Procfs::_rmap,
 	'sigact'    => \&Solaris::Procfs::_sigact,
 	'status'    => \&Solaris::Procfs::_status,
-	'lstatus'   => \&Solaris::Procfs::_lstatus,
-	'psinfo'    => \&Solaris::Procfs::_psinfo,
-	'lpsinfo'   => \&Solaris::Procfs::_lpsinfo,
 	'usage'     => \&Solaris::Procfs::_usage,
-	'lusage'    => \&Solaris::Procfs::_lusage,
-	'map'       => \&Solaris::Procfs::_map,
-	'rmap'      => \&Solaris::Procfs::_rmap,
-	'lwp'       => \&Solaris::Procfs::_lwp,
-	'auxv'      => \&Solaris::Procfs::_auxv,
 };
 
-@$FUNCTION_LIST = keys %$DISPATCHER;
 
-@$NON_OWNER_FUNCTION_LIST = qw(
+$FUNCTION_LIST = { 
+	'root'     => '',
+	'cwd'      => '',
+	'fd'       => '',
+	'auxv'     => '',
+	'lpsinfo'  => '',
+	'lstatus'  => '',
+	'lusage'   => '',
+	'lwp'      => '',
+	'map'      => '',
+	'prcred'   => '',
+	'psinfo'   => '',
+	'rmap'     => '',
+	'sigact'   => '',
+	'status'   => '',
+	'usage'    => '',
+};
 
-	lpsinfo lusage lwp psinfo usage
-);
+$NON_OWNER_FUNCTION_LIST = {
+
+	'lpsinfo'  => '',
+	'lusage'   => '',
+	'lwp'      => '',
+	'psinfo'   => '',
+	'usage'    => '',
+};
 
 foreach (keys %$DISPATCHER) {
 
@@ -161,7 +192,8 @@ sub CLEAR {
 #
 sub new {
 
-	my ($proto, $pid) = @_;
+	my $proto = shift;
+	my $pid   = shift;
 	my $class = ref($proto) || $proto;
 
 	print STDERR (caller 0)[3], ": Creating object for pid $pid\n"
@@ -176,7 +208,7 @@ sub new {
 
 	my $self = { };
 
-	tie  %$self, $class, $pid;
+	tie  %$self, $class, $pid, @_;
 	bless $self, $class;
 
 
@@ -190,30 +222,32 @@ sub new {
 #
 sub TIEHASH {
 
-	my ($pkg,$pid) = @_;
+	my $pkg = shift;
+	my $pid = shift;
 
-	my %temp                 = ();
-	$temp{ pid }             = $pid ;
+	my %temp     = (%DEFAULTPARAMS, @_);
+	$temp{ pid } = $pid ;
 
 	my $psinfo = Solaris::Procfs::psinfo($pid);
 
 	# If we own the process or if we are root, then pre-define all
 	# the available files.  Otherwise, just the owner's files.
 	#
-	my $funcs = $psinfo->{pr_euid} == $< || $< == 0 
+	my $available_procfiles = $psinfo->{pr_euid} == $< || $< == 0 
 		? $FUNCTION_LIST 
 		: $NON_OWNER_FUNCTION_LIST
 	;
 
 	print STDERR (caller 0)[3], ": Adding elements to object...\n"
 		if $DEBUG >= 2;
-	print STDERR (caller 0)[3], ": ", join(" ", @$funcs),"\n\n"
+	print STDERR (caller 0)[3], ": ", join(" ", keys %$available_procfiles),"\n\n"
 		if $DEBUG >= 2;
 
-	@temp{ @$funcs } = ("") x scalar @$funcs;
+	%temp = ( %temp, %$available_procfiles );
 
 	my $self = \%temp;
 
+	$self->{available_procfiles}  = $available_procfiles;
 	$self->{psinfo} = $psinfo;
 
 	print STDERR (caller 0)[3], ": \$self is $self, \$pkg is $pkg, \$pid is $pid\n"
@@ -239,34 +273,50 @@ sub FETCH {
 			if $DEBUG >= 2;
 		return $self->{$index};
 
-	} elsif ( -d "/proc/$self->{pid}" ) {
+	} elsif ( exists $DISPATCHER->{$index} ) {
 
-		if ( exists $self->{$index} and $self->{$index} ne '') {
+		if ( exists $self->{$index} and $self->{$index} ne '' and not $self->{autoupdate}) {
 
 			print STDERR (caller 0)[3], ": Returning cached results\n"
 				if $DEBUG >= 2;
 			return $self->{$index};
 
-		} elsif ( exists $DISPATCHER->{$index} ) {
+		} elsif ( -d "/proc/$self->{pid}" ) {
 
-			print STDERR (caller 0)[3], ": Delegating to function\n"
+			print STDERR (caller 0)[3], ": Delegating to function $index\n"
 				if $DEBUG >= 2;
-			$self->{$index} = &{ $DISPATCHER->{$index} }( $self->{pid} ) ;
-			return $self->{$index};
 
-		} else {
+			if (exists $self->{available_procfiles}->{$index}) {
 
-			print STDERR (caller 0)[3], ": No such function as $self->{$index}\n"
+				$self->{$index} = &{ $DISPATCHER->{$index} }( $self->{pid} ) ;
+				return $self->{$index};
+
+			}  else {
+
+				delete $self->{$index};
+				return &{ $DISPATCHER->{$index} }( $self->{pid} ) ;
+			}
+
+		} else {   # if not -d "/proc/$self->{pid}" 
+		
+			print STDERR (caller 0)[3], ": No such process as $self->{pid}\n"
 				if $DEBUG >= 2;
-			return;  ## If the user requested a function not in Procfs
+			return;  ## If the process no longer exists under /proc
 		}
 
-	} else {   # if not -d "/proc/$self->{pid}" 
-		
-		print STDERR (caller 0)[3], ": No such process as $self->{pid}\n"
+
+	} elsif ( exists $self->{$index} ) {    # and $DISPATCHER->{$index} does not exist
+
+		return $self->{$index};
+
+	} else {
+
+		print STDERR (caller 0)[3], ": No such function or element as $index\n"
 			if $DEBUG >= 2;
-		return;  ## If the process no longer exists under /proc
+
+		return;  ## If the user requested a function not in Procfs
 	}
+
 }
 
 #-------------------------------------------------------------
@@ -292,8 +342,9 @@ sub AUTOLOAD {
 
 		print STDERR (caller 0)[3], ": Delegating to function $AUTOLOAD\n"
 			if $DEBUG >= 2;
-		my $temp = &{ $DISPATCHER->{$AUTOLOAD} }( $self->{pid} );
-		return $temp;
+#		my $temp = &{ $DISPATCHER->{$AUTOLOAD} }( $self->{pid}, @_ );
+#		return $temp;
+		return &{ $DISPATCHER->{$AUTOLOAD} }( $self->{pid}, @_ );
 
 	} else {
 		carp ( 
@@ -304,26 +355,5 @@ sub AUTOLOAD {
 	}
 }
 
-#-------------------------------------------------------------
-#
-sub writectl {
-
-	my $self = shift;
-
-	unless (defined $self and ref($self) eq "Solaris::Procfs::Process") {
-
-		# You can't call Solaris::Procfs::Process::psinfo
-		# or any other function directly.  (Even though you can call
-		# Solaris::Procfs::psinfo and friends.)
-		#
-		carp "function Solaris::Procfs::Process::writectl: " .
-			"Must be called as a method, not as a class function";
-		return;
-	}
-
-	Solaris::Procfs::writectl( $self->{pid}, @_ );
-}
-
 1;
-
 

@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.16 
+README file for Solaris::Procfs 0.18 
 
 
 NAME
@@ -238,7 +238,41 @@ OTHER FUNCTIONS
             use Solaris::Procfs qw(writectl);
             writectl($pid,PCSET,PR_MSACCT); 
 
+ERROR HANDLING
+    Most of these functions are essentially wrappers around the system calls
+    open(), read() and write(). Basically, we are reading and writing to the
+    files under `/proc'. If any of these system calls fail, they will set
+    the system errno variable, and the function calling them will just
+    return.
+
+    When using these functions, you should check the return value just like
+    you would check the return value of a system call. Make sure that that
+    the return value is defined before using it. If the value is not
+    defined, print out the variable `$!' for a verbose description of the
+    error. The most likely error message will be "No such file or directory"
+    if the process you are accessing does not exist, or "Permission denied"
+    or "Bad file number" if you do not have permisssion to access the file.
+
+    Here is an example from the file eg1/ptree:
+
+            my $psinfo = psinfo($pid);
+
+            unless (defined $psinfo and ref $psinfo eq 'HASH') {
+
+                    warn "Cannot get psinfo on process $pid: $!\n";
+            }
+
+    Here is an example from the file eg1/pstop:
+
+            writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
+
 CHANGES
+    * Version 0.18
+                Cleaned up the error handling.
+                Created regression tests. 
+                Added several more example scripts. 
+                Reorganized files in the install package. 
+
     * Version 0.16
                 Added a writectl() function for sending signals to processes.
                 Defined a set of constants which correspond to the #define's
@@ -257,9 +291,6 @@ TO DO
     *   Improve the documentation, test scripts and sample scripts. Create
         examples of the use of the writectl() functions. Add and test a
         writelwp() function similar to writectl().
-
-    *   Implement more graceful error handling and error messages. Currently,
-        errors are handled poorly and inconsistenly. :(
 
     *   Add functions which can read the 'as' file.
 
