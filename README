@@ -1,0 +1,236 @@
+
+README file for Solaris::Procfs 0.10 
+
+
+NAME
+    Solaris::Procfs - access Solaris process information from Perl
+
+SYNOPSIS
+    (See the EXAMPLES section below for more info.)
+
+DESCRIPTION
+    This module is an interface the /proc filesystem on Solaris systems.
+
+    Each process on a Solaris system has a corresponding directory under
+    /proc, named after the process id. In each of these directories are a
+    series of files and subdirectories, which contain information about each
+    process. The proc(4) manpage gives complete details about these files.
+    Basically, the files contain one or more C structs with data about its
+    corresponding process, maintained by the kernel.
+
+    This module provides methods which access these files and convert the
+    data structures contained in them into nested hashrefs. This module has
+    been tested on Solaris 2.6 and Solaris 7. It will not work on Solaris
+    2.5.1 systems (yet).
+
+STATUS
+    This is pre-alpha software. It is far from finished. Parts of it need
+    extensive rewriting and testing. However, the core functionality does
+    seem to work properly.
+
+    Contributions and critiques would be warmly welcomed.
+
+    This module has been tested on the following systems, using gcc for
+    builds:
+
+            SunOS 5.7 (Solaris 7)   SPARC 
+            SunOS 5.7 (Solaris 7)   x86
+            SunOS 5.6 (Solaris 2.6) SPARC
+
+    It may not even build on other systems.
+
+EXAMPLES
+    There are three different ways to invoke the functions in this module:
+    as object methods, as functions, or as a tied hash.
+
+    As object methods:
+
+            use Solaris::Procfs;
+            my $p = new Solaris::Procfs;
+            my $data = $p->psinfo($pid);
+
+    As functions:
+
+            (not yet fully implemented)
+
+    As a tied hash:
+
+            use Solaris::Procfs;
+            my $p = new Solaris::Procfs;
+            $p->{$pid}->{psinfo};
+
+FUNCTIONS
+    This module defines functions which each correspond to the files
+    available under the directories in /proc. Complete descriptions of these
+    files are available in the proc(4) manpage.
+
+    Unless otherwise noted, the corresponding function in the
+    Solaris::Procfs module simply returns the contents of the file in the
+    form of a set of nested hashrefs. Exceptions to this are listed below.
+
+    These functions can also be accessed implcitly as elements in a tied
+    hash. When used this way, each process can be accessed as if it were one
+    giant Perl structure, containing all the data related to that process id
+    in the files under /proc/{id}.
+
+  as
+
+    Not yet implemented. The 'as' file contains the address-space image of
+    the process.
+
+  auxv
+
+    The 'auxv' file contains the initial values of the process's aux vector
+    in an array of auxv_t structures (see <sys/auxv.h>).
+
+  ctl
+
+    Not implemented. The 'ctl' file is a write-only file to which structured
+    messages are written directing the system to change some aspect of the
+    process's state or control its behavior in some way.
+
+  cwd
+
+    Returns a string containing the absolute path to the process' current
+    working directory. The 'cwd' file is a symbolic link to the process's
+    current working directory.
+
+  fd
+
+    Returns a hash whose keys are the process' open file descriptors, and
+    whose values are the absolute paths to the open files, as far as can be
+    determined. The 'fd' directory contains references to the open files of
+    the process. Each entry is a decimal number corresponding to an open
+    file descriptor in the process.
+
+  ldt
+
+    Not yet implemented. The 'ldt' file exists only on x86 based machines.
+    It is non-empty only if the process has established a local descriptor
+    table (LDT). If non-empty, the file contains the array of currently
+    active LDT entries in an array of elements of type struct ssd, defined
+    in <sys/sysi86.h>, one element for each active LDT entry.
+
+  lpsinfo
+
+    The 'lpsinfo' file contains a prheader structure followed by an array of
+    lwpsinfo structures, one for each lwp in the process.
+
+  lstatus
+
+    The 'lstatus' file contains a prheader structure followed by an array of
+    lwpstatus structures, one for each lwp in the process.
+
+  lusage
+
+    The 'lusage' file contains a prheader structure followed by an array of
+    prusage structures, one for each lwp in the process plus an additional
+    element at the beginning that contains the summation over all defunct
+    lwps.
+
+  lwp
+
+    The 'lwp' directory contains entries each of which names an lwp within
+    the process. These entries are themselves directories containing
+    additional files. This function returns the contents of the files
+    'lwpstatus', 'lwpsinfo', and 'lwpusage', translated into a set of nested
+    hashes. Interfaces to the files 'asrs', 'gwindoes', 'lwpctl' and 'xregs'
+    have not been implemented.
+
+  map
+
+    The 'map' file contains information about the virtual address map of the
+    process. The file contains an array of prmap structures, each of which
+    describes a contiguous virtual address region in the address space of
+    the traced process.
+
+  object
+
+    Not yet implemented. The 'object' directory containing read-only files
+    with names corresponding to the entries in the map and pagedata files.
+    Opening such a file yields a file descriptor for the underlying mapped
+    file associated with an address-space mapping in the process.
+
+  pagedata
+
+    Not yet implemented. Opening the 'pagedata' file enables tracking of
+    address space references and modifications on a per-page basis.
+
+  prcred
+
+    The 'prcred' file contains a description of the credentials associated
+    with the process (UID, GID, etc.).
+
+  psinfo
+
+    The 'psinfo' file ontains miscellaneous information about the process
+    and the representative lwp needed by the ps(1) command.
+
+  status
+
+    The 'status' file ontains state information about the process and the
+    representative lwp.
+
+  rmap
+
+    The 'rmap' file contains information about the reserved address ranges
+    of the process. Examples of such reservations include the address ranges
+    reserved for the process stack and the individual thread stacks of a
+    multi-threaded process.
+
+  root
+
+    Returns a string containing the absolute path to the process' root
+    directory. The 'root' file is a symbolic link to the process' current
+    working directory.
+
+  sigact
+
+    The 'sigact' file contains an array of sigaction structures describing
+    the current dispositions of all signals associated with the traced
+    process (see sigaction(2)).
+
+  usage
+
+    The 'usage' file contains process usage information described by a
+    prusage structure.
+
+  watch
+
+    Not yet implemented. The 'watch' file contains an array of prwatch
+    structures, one for each watched area established by the PCWATCH control
+    operation.
+
+CHANGES
+    * Version 0.10
+                Initial release on CPAN
+
+TO DO
+    *   Improve the documentation, test scripts and sample scripts.
+
+    *   Finish writing the Perl interface functions in Procfs.pm.
+
+    *   Add functions which can read the 'as' file.
+
+    *   Implement Perl functions which correspond to each of the procutils
+        binaries (under /usr/proc/bin). These are described in the proc(1)
+        manpage.
+
+    *   Add support for Solaris 8, and make sure that this package will build
+        properly on a variety of recent Solaris flavors.
+
+    *   Add support for Solaris 2.5.1. This will require a good bit of work, as
+        the /proc filesystem is rather different under Solaris 2.5.1. This
+        item is low on the priority list.
+
+THANKS
+    Much of this code is modeled after code written by Alan Burlison, and I
+    received some helpful and timely advice from Tye McQueen.
+
+    Thanks to Daniel J. Urist for writing Proc::ProcessTable. I used his
+    method for keeping track of TTY numbers.
+
+AUTHOR
+    John Nolan jpnolan@sonic.net 1999, 2000. A copyright statment is
+    contained in the source code itself.
+
