@@ -2,7 +2,7 @@
 
 package Solaris::Procfs;
 
-# Copyright (c) 1999-2001 John Nolan. All rights reserved.
+# Copyright (c) 1999-2002 John Nolan. All rights reserved.
 # This program is free software.  You may modify and/or
 # distribute it under the same terms as Perl itself.
 # This copyright notice must remain attached to the file.
@@ -14,7 +14,7 @@ package Solaris::Procfs;
 
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT_OK %EXPORT_TAGS);
 use vars qw($WARNSTRINGS $DEBUG );
-use vars qw( $not_implemented $not_this_process );
+use vars qw( $not_implemented $not_owner $insufficient_memory $read_failed);
 use strict;
 use DynaLoader;
 use Carp;
@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.20';
+$VERSION     = '0.21';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -53,7 +53,9 @@ require 'Solaris/Procfs/include/sys/procfs.ph';
 get_tty_list();
 
 $not_implemented  = "NOT IMPLEMENTED";
-$not_this_process = "";
+$not_owner = "ENOPERM: You are not owner or root and do not have permissions to open the process";
+$insufficient_memory = "ENOMEM: Request for memory failed";
+$read_failed = "pread failed";
 
 bootstrap Solaris::Procfs $VERSION;
 
@@ -612,6 +614,12 @@ Here is an example from the file eg1/pstop:
 
 =over 4
 
+=item * Version 0.21
+
+	Brian Farrell sent a very useful patch which handles
+	inspection of argv and environment of processes 
+	other than the currently running process. 
+
 =item * Version 0.20
 
 	Thomas Whateley sent a patch with functions for
@@ -697,10 +705,14 @@ accessing the /proc/<pid>/xmap file.
 Thanks to Dominic Dunlop for submitting a patch to the functions
 which access the map file.
 
+Thanks to Brian Farrell, for sending a very useful patch 
+which allows Solaris::Procfs to inspect the argv and environment 
+of processes other than the currently running process. 
+
 
 =head1 AUTHOR
 
-John Nolan jpnolan@sonic.net 1999-2001.  
+John Nolan jpnolan@sonic.net 1999-2002.  
 A copyright statment is contained in the source code itself. 
 
 =cut

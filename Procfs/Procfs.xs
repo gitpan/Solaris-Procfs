@@ -557,6 +557,7 @@ _get_ttyname(dev_t * ttydev)
 	}
 }
 
+
 /* Convert a struct of type psinfo_t (sys/procfs.h) to a Perl hash */
 SV *
 _psinfo2hash(psinfo_t * psinfo) 
@@ -565,6 +566,15 @@ _psinfo2hash(psinfo_t * psinfo)
 	AV*   pr_argv = newAV();
 	AV*   pr_envp = newAV();
 	int i;
+	char fdesc;
+	char filepath[MAXPATHLEN];
+	char **argvp;
+	char *buf;
+	char *envp;
+	uid_t	uid;
+	long maxsize;
+	off_t envloc;
+	int n;
 
 	SAVE_INT32(hash, psinfo, pr_flag);
 	SAVE_INT32(hash, psinfo, pr_nlwp);
@@ -598,56 +608,172 @@ _psinfo2hash(psinfo_t * psinfo)
 	SAVE_INT32( hash, psinfo, pr_wstat);
 	SAVE_INT32( hash, psinfo, pr_argc);
 
-	/* Don't attempt to fetch pr_argv or pr_envp unless the process
-	 * which we're looking at happens to be this process.  
-	 * If we try to to look at some other process, then we'll segfault. 
-	 *
-	 * Pid is a global variable (yikes!) defined in Procfs.h
+	/*
+	 * To get the argv vector and environment variables for the process you need to 
+	 * be either root or the owner of the process.  Otherwise you will not be able
+	 * to open the processes memory.
 	 */
-	if (Pid != (int) getpid() ) {
+	uid = geteuid();
+	if ((uid == 0) || (uid == psinfo->pr_euid)) {
 
-		hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-			newSVsv(perl_get_sv( "Solaris::Procfs::not_this_process", 0)), 0);
-		hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-			newSVsv(perl_get_sv( "Solaris::Procfs::not_this_process", 0)), 0);
+		/*
+		 * Find the maximum length of the ARG information.
+		 */
 
-		/* we use hv_fetch to store the undefined value 
-		hv_fetch(hash, "pr_argv", sizeof("pr_argv") - 1, 1 );
-		hv_fetch(hash, "pr_envp", sizeof("pr_envp") - 1, 1 );
-		*/
+		if ((maxsize=sysconf(_SC_ARG_MAX)) < 0) {
+        		perror("error calling sysconf");
+			hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+				newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
+			hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+				newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
+    		}
+
+		/* 
+		 * We should be able to open up the address space to find out
+		 * the arguments and the environment for the process.
+		 *
+		 * They are located at the memory locations specified by psinfo->pr_argv and psinfo->pr_envp
+		 * respectively and ar stored/accessed like they are for the main line of the program.
+		 *
+		 * ie: int main(char *argv[],argc, char *envp[]);
+		 *
+		 * The memory location is the offset in the memory space file (/proc/<pid>/as).
+		 *
+		 */
+		sprintf(filepath, "/proc/%d/%s", psinfo->pr_pid,"as");
+		if ( (fdesc = open(filepath, O_RDONLY)) > -1 ) {
+
+			/*
+			 * First find all of the command line arguments
+			 */
+
+
+			/*
+			 * the memory location for *argv[]
+			 */
+
+			/*
+			 *   Using the argc from the psinfo structure, create an array
+			 *   and store the argv pointers.
+			 */
+			argvp = (char **) malloc(sizeof(char *) * (psinfo->pr_argc + 1));
+
+			if (pread(fdesc,argvp,(sizeof(char *) * (psinfo->pr_argc + 1)),psinfo->pr_argv) <= 0) {
+				perror("pread when getting command line arguments from memory for process");
+				close(fdesc);
+				hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+				hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+				SvREFCNT_dec(pr_argv);
+				SvREFCNT_dec(pr_envp);
+			} else {
+
+				/*
+				 *   Loop through the argv values upto a count of argc.  Save  
+				 *   each argument in a separate memory location.
+				 */
+				buf = (char *)malloc(maxsize);
+				if (buf == NULL) {
+					perror("malloc failed for initial storage buffer");
+					close(fdesc);
+					hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+						newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
+					hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+						newSVsv(perl_get_sv( "Solaris::Procfs::insufficient_memory", 0)), 0);
+					SvREFCNT_dec(pr_argv);
+					SvREFCNT_dec(pr_envp);
+				} else {
+					for (n = 0; n < psinfo->pr_argc; n++) {
+						if (pread(fdesc,buf,maxsize-1,(off_t)argvp[n]) <= 0) {
+							perror("pread error reading command line arguments");
+							close(fdesc);
+							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							SvREFCNT_dec(pr_argv);
+							SvREFCNT_dec(pr_envp);
+						} else {
+							av_push(pr_argv, newSVpv(   buf , 0   ));
+						}
+					}
+				}
+
+				SAVE_REF(hash, pr_argv);
+	
+				/* now the environment */
+				envloc = psinfo->pr_envp;
+	
+				/* prime the pump by finding the first env location */
+				if (pread(fdesc,&envp,sizeof(char *),envloc) <= 0) {
+					perror("pread of initial environment location");
+					close(fdesc);
+					hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+					newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+					hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+						newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+					SvREFCNT_dec(pr_argv);
+					SvREFCNT_dec(pr_envp);
+				} else {
+					do {
+						if (pread(fdesc,buf,maxsize-1,(off_t)envp) <= 0) {
+							perror("pread of environment pointer location");
+							close(fdesc);
+							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							SvREFCNT_dec(pr_argv);
+							SvREFCNT_dec(pr_envp);
+							continue;
+						}
+					
+						av_push(pr_envp, newSVpv(   buf , 0   ));
+	
+						/* step through the *envp pointer list to point to where the next pointer location would be */
+						envloc = envloc + sizeof(char *);
+	
+						/* get the next environment pointer */
+						if (pread(fdesc,&envp,sizeof(char *),envloc) <= 0) {
+							perror("pread of environment location");
+							close(fdesc);
+							hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
+								newSVsv(perl_get_sv( "Solaris::Procfs::read_failed", 0)), 0);
+							SvREFCNT_dec(pr_argv);
+							SvREFCNT_dec(pr_envp);
+							continue;
+						}
+					} while (envp != NULL );
+				}
+			}
+			SAVE_REF(hash, pr_envp);
+
+			close(fdesc);
+		}
+	} else { 
+		/*
+		 * this should only happen if the process died or you don't have permission to
+		 * read the "/proc/<pid>/as file.  Which means you are either not root or
+		 * you are not the owner of the process
+				av_push(pr_envp, newSVpv(   buf , 0   ));
+		 */
+
+		hv_store(hash, "pr_argv", sizeof("pr_argv") - 1,
+			newSVsv(perl_get_sv( "Solaris::Procfs::not_owner", 0)), 0);
+		hv_store(hash, "pr_envp", sizeof("pr_envp") - 1,
+			newSVsv(perl_get_sv( "Solaris::Procfs::not_owner", 0)), 0);
+
 		SvREFCNT_dec(pr_argv);
 		SvREFCNT_dec(pr_envp);
-
-	} else {
-
-		/* psinfo->pr_argv becomes a reference to a list 
-	 	* containing the argv array. 
-	 	*/
-		for ( i = 0; i < psinfo->pr_argc;  i++  ) { 
-
-			av_push(pr_argv, newSVpv(   *(( (char **)psinfo->pr_argv ) + i), 0   ));
-		}
-		SAVE_REF(hash, pr_argv);
-
-		/* psinfo->pr_envp becomes a reference to a list 
-	 	* containing the environment. 
-	 	*
-	 	* NOTE -- this might segfault.  I'm assuming here that the final
-	 	* pointer in this vector is a null pointer, but I don't know how
-	 	* to check this.  
-	 	*/
-		for ( i = 0;  *( ((char **)psinfo->pr_envp) + i ) != NULL;  i++  ) { 
-
-			av_push(pr_envp, newSVpv(   *(  ((char **)psinfo->pr_envp) + i  ),   0   ));
-		}
-		SAVE_REF(hash, pr_envp);
 	}
-
+	
 	SAVE_STRUCT(hash, psinfo, pr_lwp,  _lwpsinfo2hash );
 
 	return ( newRV_noinc( (SV*) hash ) );
 }
-
 
 /* Convert a struct of type prcred_t (sys/procfs.h) to a Perl hash */
 SV *

@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.20 
+README file for Solaris::Procfs 0.21 
 
 
 NAME
@@ -278,6 +278,11 @@ ERROR HANDLING
             writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
 CHANGES
+    * Version 0.21
+                Brian Farrell sent a very useful patch which handles
+                inspection of argv and environment of processes 
+                other than the currently running process. 
+
     * Version 0.20
                 Thomas Whateley sent a patch with functions for
                 accessing the /proc/<pid>/xmap file.
@@ -340,7 +345,11 @@ THANKS
     Thanks to Dominic Dunlop for submitting a patch to the functions which
     access the map file.
 
+    Thanks to Brian Farrell, for sending a very useful patch which allows
+    Solaris::Procfs to inspect the argv and environment of processes other
+    than the currently running process.
+
 AUTHOR
-    John Nolan jpnolan@sonic.net 1999-2001. A copyright statment is
+    John Nolan jpnolan@sonic.net 1999-2002. A copyright statment is
     contained in the source code itself.
 
