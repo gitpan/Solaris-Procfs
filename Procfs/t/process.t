@@ -47,7 +47,11 @@ $want = 'perl';            test q( $p->{psinfo}->{pr_fname} );
 #                           test q( join(" ", @{$p->{psinfo}->{pr_argv}}) );
 
 $want =  1;                test q( $p->{psinfo}->{pr_lwp}->{pr_lwpid} );
-$want = 20;                test q( $p->{psinfo}->{pr_lwp}->{pr_nice} );
+
+(my $nice) = grep /^\d+$/, `/usr/bin/ps -o nice -p $$`;
+chomp($nice);
+
+$want = $nice;             test q( $p->{psinfo}->{pr_lwp}->{pr_nice} );
 $want =  1;                test q( $p->{psinfo}->{pr_lwp}->{pr_pctcpu} > 0 );
 
 

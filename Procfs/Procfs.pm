@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.22';
+$VERSION     = '0.23';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -41,7 +41,7 @@ $DEBUG       = 1;
 		lpsinfo usage lusage map rmap lwp auxv 
 		proot pcwd xmap 
 	) ],
-	'no_tty_list' => [],
+	'dont_preload_tty_list' => [],
 );
 
 
@@ -59,10 +59,10 @@ sub import {
 
 	# On some systems, the list of devices is enormous
 	# and it takes a long time to read them all. 
-	# If you use the 'no_tty_list' pragma then we
-	# will not try to fetch the list at launch time.
+	# If you use the 'dont_preload_tty_list' pragma then we
+	# will not try to load the list at launch time.
 	#
-	get_tty_list() unless $flags{':no_tty_list'};
+	get_tty_list() unless $flags{':dont_preload_tty_list'};
 
 	my($oldlevel) = $Exporter::ExportLevel;
 	$Exporter::ExportLevel = 1;
@@ -411,6 +411,20 @@ As a filesystem object with tied hashes:
 	my $fs = new Solaris::Procfs::Filesystem;
 	my $psinfo = $fs->{$pid}->{psinfo};
 
+By default the module will fill the hash
+%Solaris::Procfs::TTYDEVS with a mapping of 
+TTY device ids to the name of the TTY (it examines
+each file under /dev/pts).  The module uses this mapping 
+to populate fields in other hashes. If your system 
+has a very large list of these TTYs, and you want to 
+suppress this preloading behavior, then use the following pragma:
+
+	use Solaris::Procfs qw(:dont_preload_tty_list);
+
+The module will then use the string '??' to populate
+fields which normally contain TTY names. 
+
+
 =head1 FUNCTIONS
 
 This module defines functions which each correspond to 
@@ -618,6 +632,11 @@ Here is an example from the file eg1/pstop:
 
 =over 4
 
+=item * Version 0.23
+
+	Fixed one bug in the basic.t and process.t test scripts. 
+	Added more notes to the usage instructions. 
+
 =item * Version 0.22
 
 	Fixed a bug in the _prcred function, reported by
@@ -694,13 +713,6 @@ Add functions which can read the 'as' file.
 Finish implementing Perl scripts which correspond to each of
 the procutils binaries (under /usr/proc/bin).
 These are described in the proc(1) manpage. 
-
-=item *
-
-Add support for Solaris 2.5.1.  This will require 
-a good bit of work, as the /proc filesystem is 
-rather different under Solaris 2.5.1.   This item is
-low on the priority list. 
 
 =back
 

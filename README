@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.22 
+README file for Solaris::Procfs 0.23 
 
 
 NAME
@@ -71,6 +71,19 @@ EXAMPLES
 
             my $fs = new Solaris::Procfs::Filesystem;
             my $psinfo = $fs->{$pid}->{psinfo};
+
+    By default the module will fill the hash
+    %Solaris::Procfs::TTYDEVS with a mapping of TTY device ids to
+    the name of the TTY (it examines each file under /dev/pts). The
+    module uses this mapping to populate fields in other hashes. If
+    your system has a very large list of these TTYs, and you want to
+    suppress this preloading behavior, then use the following
+    pragma:
+
+            use Solaris::Procfs qw(:dont_preload_tty_list);
+
+    The module will then use the string '??' to populate fields
+    which normally contain TTY names.
 
 FUNCTIONS
     This module defines functions which each correspond to the files
@@ -274,6 +287,10 @@ ERROR HANDLING
             writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
 CHANGES
+    * Version 0.23
+                Fixed one bug in the basic.t and process.t test scripts. 
+                Added more notes to the usage instructions. 
+
     * Version 0.22
                 Fixed a bug in the _prcred function, reported by
                 David Landgren and Chris Lamb.  Also fixed a bug 
@@ -331,10 +348,6 @@ TO DO
     *   Finish implementing Perl scripts which correspond to each of the
         procutils binaries (under /usr/proc/bin). These are
         described in the proc(1) manpage.
-
-    *   Add support for Solaris 2.5.1. This will require a good bit of
-        work, as the /proc filesystem is rather different under
-        Solaris 2.5.1. This item is low on the priority list.
 
 THANKS
     Much of this code is modeled after code written by Alan
