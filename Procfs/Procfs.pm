@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.24';
+$VERSION     = '0.25';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -632,7 +632,7 @@ Here is an example from the file examples/pstop:
 
 =over 4
 
-=item * Version 0.24
+=item * Version 0.25
 
 	Plugged a memory leak in the _psinfo2hash() function.
 	Thanks to Dmitry Frolov for catching this and sending a patch. 

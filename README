@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.24 
+README file for Solaris::Procfs 0.25 
 
 
 NAME
@@ -287,7 +287,7 @@ ERROR HANDLING
             writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
 CHANGES
-    * Version 0.24
+    * Version 0.25
                 Plugged a memory leak in the _psinfo2hash() function.
                 Thanks to Dmitry Frolov for catching this and sending a patch. 
 

@@ -570,8 +570,8 @@ _psinfo2hash(psinfo_t * psinfo)
 	int i;
 	char fdesc;
 	char filepath[MAXPATHLEN];
-	char **argvp;
-	char *buf;
+	char **argvp = NULL;
+	char *buf = NULL;
 	char *envp;
 	uid_t	uid;
 	long maxsize;
