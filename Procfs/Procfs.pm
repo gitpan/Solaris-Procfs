@@ -2,7 +2,7 @@
 
 package Solaris::Procfs;
 
-# Copyright (c) 1999,2000 John Nolan. All rights reserved.
+# Copyright (c) 1999-2001 John Nolan. All rights reserved.
 # This program is free software.  You may modify and/or
 # distribute it under the same terms as Perl itself.
 # This copyright notice must remain attached to the file.
@@ -23,7 +23,7 @@ use File::Find;
 require Exporter;
 require Cwd;  # Don't use "use", otherwise we'll import the cwd() function
 
-$VERSION     = '0.18';
+$VERSION     = '0.19';
 $DEBUG       = 1;
 @ISA         = qw(DynaLoader Exporter);
 @EXPORT_OK   = qw( 
@@ -133,6 +133,9 @@ sub root {
 
 	my $pid = $_[0];
 
+	my $err = 0;
+
+	local $SIG{__WARN__} = sub { $err = 1; return; };
 	return unless stat "/proc/$pid";
 
 	my $path = Cwd::abs_path("/proc/$pid/root/.");
@@ -324,10 +327,10 @@ more C structs with data about its corresponding process,
 maintained by the kernel.  
 
 This module provides methods which access these files 
-and convert the data structures contained in them 
-into nested hashrefs.  This module has been tested 
-on Solaris 2.6, 7 and 8.  It will not work on 
-Solaris 2.5.1 systems (yet). 
+and convert the C structs contained in them into Perl 
+data structures.  A few utility functions are also 
+included for manipulating these files. 
+
 
 =head1 STATUS
 
@@ -337,16 +340,20 @@ However, the core functionality does seem to work properly.
 
 Contributions and critiques would be warmly welcomed. 
 
-This module has been tested on the following systems,
+This module has been tested on the following configurations,
 using gcc for builds:
 
-	SunOS 5.6 (Solaris 2.6) SPARC  (perl 5.004_04, 5.005_03, 5.6.0)
-	SunOS 5.7 (Solaris 7)   SPARC  (perl 5.005_03)
-	SunOS 5.7 (Solaris 7)   x86    (perl 5.005_03)
-	SunOS 5.8 (Solaris 8)   SPARC  (perl 5.005_03, 5.6.0)
+    Solaris 2.6  SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
+    Solaris 2.6  SPARC  SUNWspro:  perl 5.004_04, 5.005_03, 5.6.0
+    Solaris 7    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
+    Solaris 7    x86    gcc:       perl 5.004_04, 5.005_03, 5.6.0
+    Solaris 8    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
 
-It may not even build on other systems.  It has not been tested
-using the Sun Workshop compiler.  
+Solaris 2.5.1 is not supported, because the /proc interface 
+is quite different on that platform. 
+
+If you are building on some configuration not listed here,
+please send me an email.  
 
 
 =head1 EXAMPLES
@@ -430,7 +437,7 @@ structured messages are written directing the system to change
 some aspect of the process's state or control its behavior 
 in some way. 
 
-=head2 cwd
+=head2 cwd or pcwd
 
 Returns a string containing the absolute path to
 the process' current working directory.  The 'cwd' file
@@ -514,7 +521,7 @@ ranges of the process.  Examples  of such reservations include
 the address ranges reserved for the process stack and the individual 
 thread stacks of a multi-threaded process. 
 
-=head2 root
+=head2 root or proot
 
 Returns a string containing the absolute path to the process' root 
 directory. The 'root' file is a symbolic link to the process' 
@@ -547,11 +554,13 @@ by the PCWATCH control operation.
 =head2 writectl
 
 Write control directives to a process control file (/proc/<pid>/ctl).
-For example, the following code will turn on microstate accounging
+For example, the following code will turn on microstate accounting
 for a given process ($pid):
 
 	use Solaris::Procfs qw(writectl);
 	writectl($pid,PCSET,PR_MSACCT); 
+
+
 
 =head1 ERROR HANDLING
 
@@ -567,7 +576,7 @@ that that the return value is defined before using it.  If the value
 is not defined, print out the variable C<$!> for a verbose description 
 of the error.  The most likely error message will be "No such file or directory" 
 if the process you are accessing does not exist, or "Permission denied" 
-or "Bad file number" if you do not have permisssion to access the file.  
+or "Bad file number" if you do not have permission to access the file.  
 
 Here is an example from the file eg1/ptree:
 
@@ -586,6 +595,12 @@ Here is an example from the file eg1/pstop:
 =head1 CHANGES
 
 =over 4
+
+=item * Version 0.19
+
+	Kenneth Skaar sent a patch which fixed some memory leaks.
+	Updated the documentation.
+	Expanded the regression tests. 
 
 =item * Version 0.18
 
@@ -650,9 +665,12 @@ and I received some helpful and timely advice from Tye McQueen.
 Thanks to Daniel J. Urist for writing Proc::ProcessTable.
 I used his method for keeping track of TTY numbers. 
 
+Thanks to Kennth Skaar (kenneths@regina.uio.no) for fixing
+some memory leaks and teaching me to count (references).  
+
 =head1 AUTHOR
 
-John Nolan jpnolan@sonic.net 1999, 2000.  
+John Nolan jpnolan@sonic.net 1999-2001.  
 A copyright statment is contained in the source code itself. 
 
 =cut

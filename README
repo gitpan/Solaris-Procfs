@@ -1,5 +1,5 @@
 
-README file for Solaris::Procfs 0.18 
+README file for Solaris::Procfs 0.19 
 
 
 NAME
@@ -18,10 +18,9 @@ DESCRIPTION
     Basically, the files contain one or more C structs with data about its
     corresponding process, maintained by the kernel.
 
-    This module provides methods which access these files and convert the
-    data structures contained in them into nested hashrefs. This module has
-    been tested on Solaris 2.6, 7 and 8. It will not work on Solaris 2.5.1
-    systems (yet).
+    This module provides methods which access these files and convert the C
+    structs contained in them into Perl data structures. A few utility
+    functions are also included for manipulating these files.
 
 STATUS
     This is pre-alpha software. It is far from finished. Parts of it need
@@ -30,16 +29,20 @@ STATUS
 
     Contributions and critiques would be warmly welcomed.
 
-    This module has been tested on the following systems, using gcc for
-    builds:
+    This module has been tested on the following configurations, using gcc
+    for builds:
 
-            SunOS 5.6 (Solaris 2.6) SPARC  (perl 5.004_04, 5.005_03, 5.6.0)
-            SunOS 5.7 (Solaris 7)   SPARC  (perl 5.005_03)
-            SunOS 5.7 (Solaris 7)   x86    (perl 5.005_03)
-            SunOS 5.8 (Solaris 8)   SPARC  (perl 5.005_03, 5.6.0)
+        Solaris 2.6  SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
+        Solaris 2.6  SPARC  SUNWspro:  perl 5.004_04, 5.005_03, 5.6.0
+        Solaris 7    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
+        Solaris 7    x86    gcc:       perl 5.004_04, 5.005_03, 5.6.0
+        Solaris 8    SPARC  gcc:       perl 5.004_04, 5.005_03, 5.6.0
 
-    It may not even build on other systems. It has not been tested using the
-    Sun Workshop compiler.
+    Solaris 2.5.1 is not supported, because the /proc interface is quite
+    different on that platform.
+
+    If you are building on some configuration not listed here, please send
+    me an email.
 
 EXAMPLES
     There are several different ways to invoke the functions in this module:
@@ -116,7 +119,7 @@ FUNCTIONS
     messages are written directing the system to change some aspect of the
     process's state or control its behavior in some way.
 
-  cwd
+  cwd or pcwd
 
     Returns a string containing the absolute path to the process' current
     working directory. The 'cwd' file is a symbolic link to the process's
@@ -200,7 +203,7 @@ FUNCTIONS
     reserved for the process stack and the individual thread stacks of a
     multi-threaded process.
 
-  root
+  root or proot
 
     Returns a string containing the absolute path to the process' root
     directory. The 'root' file is a symbolic link to the process' current
@@ -232,7 +235,7 @@ OTHER FUNCTIONS
   writectl
 
     Write control directives to a process control file (/proc/<pid>/ctl).
-    For example, the following code will turn on microstate accounging for a
+    For example, the following code will turn on microstate accounting for a
     given process ($pid):
 
             use Solaris::Procfs qw(writectl);
@@ -251,7 +254,7 @@ ERROR HANDLING
     defined, print out the variable `$!' for a verbose description of the
     error. The most likely error message will be "No such file or directory"
     if the process you are accessing does not exist, or "Permission denied"
-    or "Bad file number" if you do not have permisssion to access the file.
+    or "Bad file number" if you do not have permission to access the file.
 
     Here is an example from the file eg1/ptree:
 
@@ -267,6 +270,11 @@ ERROR HANDLING
             writectl($pid,PCSTOP) or warn "Can't control process $pid: $!\n";
 
 CHANGES
+    * Version 0.19
+                Kenneth Skaar sent a patch which fixed some memory leaks.
+                Updated the documentation.
+                Expanded the regression tests. 
+
     * Version 0.18
                 Cleaned up the error handling.
                 Created regression tests. 
@@ -309,7 +317,10 @@ THANKS
     Thanks to Daniel J. Urist for writing Proc::ProcessTable. I used his
     method for keeping track of TTY numbers.
 
+    Thanks to Kennth Skaar (kenneths@regina.uio.no) for fixing some memory
+    leaks and teaching me to count (references).
+
 AUTHOR
-    John Nolan jpnolan@sonic.net 1999, 2000. A copyright statment is
+    John Nolan jpnolan@sonic.net 1999-2001. A copyright statment is
     contained in the source code itself.
 

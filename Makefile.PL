@@ -11,7 +11,7 @@ if ($sys ne "SunOS" || $rel !~ /^(5.6|5.7|5.8)$/) {
 
 WriteMakefile(
    NAME         => 'Solaris',
-   VERSION      => '0.18',
+   VERSION      => '0.19',
    DIR          => [ 'Procfs' ],
 #  EXE_FILES    => [ 'Procfs/flags.pl' ],
 );

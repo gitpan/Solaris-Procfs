@@ -503,24 +503,21 @@ _lwpsinfo2hash(lwpsinfo_t * lwpsinfo)
 SV *
 _get_ttyname(dev_t * ttydev)
 {
-	SV*   ttynum   = newSViv(* ttydev);
+	SV*   ttynum   = newSViv(* ttydev); 
 	SV**  ttyname;
 	HV*   Ttydevs  = perl_get_hv( "Solaris::Procfs::TTYDEVS", 0);
 	STRLEN len;
-
+	
+       	sv_2mortal(ttynum);	
 	if (*ttydev == PRNODEV) {
-
 		/* if the controlling terminal is not defined */
 		return newSVpv("?", 0);
-
 	} else if (
-
 		/* Look up the ttydev in the Ttydevs hash */
 		Ttydevs != NULL &&
 		(ttyname = hv_fetch( Ttydevs, SvPV(ttynum, len), sv_len(ttynum), 0)) != NULL
 	) {
-		return *ttyname;
-
+		return newSVsv(*ttyname);
 	} else {
 
 		/* Can't determine the ttydev */
@@ -578,14 +575,16 @@ _psinfo2hash(psinfo_t * psinfo)
 	if (Pid != (int) getpid() ) {
 
 		hv_store(hash, "pr_argv", sizeof("pr_argv") - 1, 
-			perl_get_sv( "Solaris::Procfs::not_this_process", 0), 0);
+			newSVsv(perl_get_sv( "Solaris::Procfs::not_this_process", 0)), 0);
 		hv_store(hash, "pr_envp", sizeof("pr_envp") - 1, 
-			perl_get_sv( "Solaris::Procfs::not_this_process", 0), 0);
+			newSVsv(perl_get_sv( "Solaris::Procfs::not_this_process", 0)), 0);
 
 		/* we use hv_fetch to store the undefined value 
 		hv_fetch(hash, "pr_argv", sizeof("pr_argv") - 1, 1 );
 		hv_fetch(hash, "pr_envp", sizeof("pr_envp") - 1, 1 );
 		*/
+		SvREFCNT_dec(pr_argv);
+		SvREFCNT_dec(pr_envp);
 
 	} else {
 
@@ -659,7 +658,7 @@ _auxv2hash(auxv_t * auxv)
 	sprintf(address, "%08X", auxv->a_un.a_ptr); 
 	hv_store(a_un, "a_ptr", sizeof("a_ptr") - 1, newSVpv(address, 0), 0); 
 	hv_store(a_un, "a_fcn", sizeof("a_fcn") - 1, 
-		perl_get_sv( "Solaris::Procfs::not_implemented", 0), 0);
+		newSVsv(perl_get_sv( "Solaris::Procfs::not_implemented", 0)), 0);
 
 	hv_store(hash, "a_un",  sizeof("a_un")  - 1, newRV_noinc( (SV*) a_un ), 0 );
 
@@ -787,8 +786,6 @@ _sigact(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 SV *
 _status(pid) 
@@ -805,8 +802,6 @@ _status(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 SV *
 _prcred(pid) 
@@ -827,9 +822,6 @@ _prcred(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
-
 
 SV *
 _psinfo(pid) 
@@ -845,9 +837,6 @@ _psinfo(pid)
 
 	OUTPUT:
 	RETVAL
-
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -866,8 +855,6 @@ _lpsinfo(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -886,8 +873,6 @@ _lstatus(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -906,8 +891,6 @@ _lusage(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -925,9 +908,6 @@ _usage(pid)
 
 	OUTPUT:
 	RETVAL
-
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 
@@ -947,9 +927,6 @@ _map(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
-
 
 SV *
 _auxv(pid) 
@@ -967,8 +944,6 @@ _auxv(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -1004,9 +979,6 @@ _writectl(pid,...)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
-
 
 SV *
 _rmap(pid) 
@@ -1024,8 +996,6 @@ _rmap(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
 
 SV *
@@ -1043,15 +1013,14 @@ _lwp(pid)
 	lwpsinfo_t	lwpsinfo;
 	prusage_t	prusage;
 
-	HV *		lwp = newHV();
-	SV *		val = newSVpv("", 0);
+	SV *		val = NULL;
 
 	CODE:
 
 	sprintf( filepath, "/proc/%d/lwp", pid );
 
 	if ((dp = opendir(filepath)) == NULL) { 
-
+		hv_undef(hash);
 		XSRETURN_UNDEF;
 	}
 
@@ -1059,7 +1028,7 @@ _lwp(pid)
 
 		/* Only look at pid dirs */
 		if (de->d_name[0] >= '0' && de->d_name[0] <= '9') {
-
+			HV* lwp=newHV();
 			sprintf( filepath, "lwp/%s/lwpstatus", de->d_name );
 			val = read_proc_file( 
 				1, (void *) &lwpstatus, sizeof(lwpstatus), 
@@ -1094,6 +1063,4 @@ _lwp(pid)
 	OUTPUT:
 	RETVAL
 
-	CLEANUP:
-	SvREFCNT_inc( RETVAL );
 
